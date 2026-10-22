@@ -289,7 +289,7 @@ function openModal(book) {
     if (!isbn) { msg.textContent = "⚠️ Entrez d'abord un ISBN."; return; }
     msg.textContent = "🔎 Recherche (Google Books, puis Open Library)…";
     const data = await fetchBookInfo(isbn);
-    if (data) {
+    if (data && !data.error) {
       if (!$("#mTitle").value) $("#mTitle").value = data.title;
       if (!$("#mAuthor").value) $("#mAuthor").value = data.author;
       if (!$("#mYear").value && data.year) $("#mYear").value = data.year;
@@ -297,7 +297,7 @@ function openModal(book) {
       if (!$("#mCategory").value && data.subjects.length) $("#mCategory").value = data.subjects[0];
       msg.textContent = `✅ Fiche trouvée (${data.source}) et complétée (champs vides uniquement).`;
     } else {
-      msg.textContent = "❌ Aucune fiche trouvée (ou pas d'accès internet). Complétez manuellement.";
+      msg.textContent = `❌ ${data && data.error ? data.error : "Aucune fiche trouvée."} Complétez manuellement.`;
     }
   };
   $("#mSave").onclick = () => {
@@ -422,13 +422,17 @@ $("#btnStopScan").addEventListener("click", stopScan);
 
 // ---------- Récupération des infos depuis internet ----------
 // Recherche en cascade : Google Books (excellente couverture des éditions françaises),
-// puis Open Library en secours. Retourne null si aucune fiche n'est trouvée.
+// puis Open Library en secours. Diagnostics précis : chaque échec est identifié
+// (« introuvable » vs « API injoignable ») pour ne pas tromper l'utilisateur.
 async function fetchFromGoogleBooks(isbn) {
   try {
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&country=FR`, { signal: AbortSignal.timeout(8000) });
+    // Sans paramètre country, l'API répond parfois 429 ; on essaie FR puis US.
+    let res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&country=FR`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&country=US`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return { error: `API Google Books inaccessible (code ${res.status})` };
     const data = await res.json();
     const item = data.items && data.items[0] && data.items[0].volumeInfo;
-    if (!item || !item.title) return null;
+    if (!item || !item.title) return { error: "ISBN inconnu de Google Books" };
     return {
       title: item.title,
       author: (item.authors || []).join(", "),
@@ -436,7 +440,7 @@ async function fetchFromGoogleBooks(isbn) {
       summary: item.description ? String(item.description).replace(/<[^>]+>/g, "") : "",
       subjects: (item.categories || []).slice(0, 5)
     };
-  } catch (e) { return null; }
+  } catch (e) { return { error: "réseau bloqué ou hors ligne (Google Books)" }; }
 }
 
 async function fetchFromOpenLibrary(isbn) {
@@ -444,7 +448,7 @@ async function fetchFromOpenLibrary(isbn) {
     const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`, { signal: AbortSignal.timeout(8000) });
     const data = await res.json();
     const rec = data && data["ISBN:" + isbn];
-    if (!rec || !rec.title) return null;
+    if (!rec || !rec.title) return { error: "ISBN inconnu d'Open Library" };
     const summary = rec.excerpts && rec.excerpts[0] && rec.excerpts[0].text
       ? rec.excerpts[0].text
       : (rec.notes ? String(rec.notes) : "");
@@ -456,16 +460,20 @@ async function fetchFromOpenLibrary(isbn) {
       subjects: (rec.subjects || []).map(s => s.name).filter(n => n && n.length < 30).slice(0, 5)
     };
   } catch (e) {
-    return null; // pas d'accès internet, fiche introuvable, etc.
+    return { error: "réseau bloqué ou hors ligne (Open Library)" };
   }
 }
 
 async function fetchBookInfo(isbn) {
+  const errors = [];
   const g = await fetchFromGoogleBooks(isbn);
-  if (g && (g.summary || g.author)) return { ...g, source: "Google Books" };
+  if (g && !g.error && (g.summary || g.author)) return { ...g, source: "Google Books" };
+  if (g && g.error) errors.push(g.error);
   const o = await fetchFromOpenLibrary(isbn);
-  if (o) return { ...o, source: "Open Library" };
-  return g ? { ...g, source: "Google Books" } : null;
+  if (o && !o.error) return { ...o, source: "Open Library" };
+  if (o && o.error) errors.push(o.error);
+  if (g && !g.error) return { ...g, source: "Google Books" }; // fiche trouvée mais sommaire
+  return { error: errors.join(" ; ") || "aucune réponse" };
 }
 
 // ---------- Traitement d'un code scanné / saisi ----------
@@ -480,7 +488,7 @@ async function handleScannedCode(code) {
   scanMsg(`Code détecté : <strong>${esc(code)}</strong> — recherche des infos (Google Books, puis Open Library)…`);
   const draft = { id: uid(), title: "", author: "", isbn: code, year: "", status: "to-read", notes: "", category: "", loanedTo: "", addedAt: Date.now() };
   const info = await fetchBookInfo(code);
-  if (info) {
+  if (info && !info.error) {
     draft.title = info.title;
     draft.author = info.author;
     draft.year = info.year;
@@ -488,7 +496,7 @@ async function handleScannedCode(code) {
     if (info.subjects.length) draft.category = info.subjects[0];
     scanMsg(`✅ « ${esc(info.title)} » trouvé sur ${info.source}. Vérifiez et complétez la fiche…`);
   } else {
-    scanMsg(`Code : <strong>${esc(code)}</strong> — aucune fiche trouvée (ou hors ligne), complétez manuellement…`);
+    scanMsg(`Code : <strong>${esc(code)}</strong> — ${esc(info && info.error ? info.error : "aucune fiche trouvée")}. Complétez manuellement…`);
   }
   openModal(draft);
 }
