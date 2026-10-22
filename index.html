@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bibli-o-thèque</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --card: #ffffff; --ink: #2b2620; --muted: #8a8175;
+    --accent: #b45309; --accent2: #92400e; --ok: #15803d; --danger: #b91c1c;
+    --border: #e5dfd5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  header { background: linear-gradient(135deg, #7c2d12, #b45309); color: #fff; padding: 16px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+  header h1 { font-size: 1.25rem; margin: 0; flex: 1; }
+  header .stats { font-size: .8rem; opacity: .9; }
+  .tabs { display: flex; gap: 8px; }
+  .tab { background: rgba(255,255,255,.15); border: none; color: #fff; padding: 8px 14px; border-radius: 999px; cursor: pointer; font-size: .85rem; }
+  .tab.active { background: #fff; color: var(--accent2); font-weight: 600; }
+  main { max-width: 900px; margin: 0 auto; padding: 16px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  input, select, textarea, button { font: inherit; }
+  .btn { background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 10px 16px; cursor: pointer; font-weight: 600; }
+  .btn.secondary { background: #fff; color: var(--ink); border: 1px solid var(--border); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .field { flex: 1; min-width: 180px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .book { display: flex; gap: 12px; align-items: flex-start; }
+  .book .cover { width: 44px; height: 62px; border-radius: 6px; background: linear-gradient(160deg,#d6b25a,#8a5a2b); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
+  .book .meta { flex: 1; min-width: 0; }
+  .book h3 { margin: 0 0 2px; font-size: 1rem; }
+  .book .sub { color: var(--muted); font-size: .82rem; margin-bottom: 6px; }
+  .badge { display: inline-block; font-size: .7rem; padding: 2px 8px; border-radius: 999px; background: #fef3c7; color: #92400e; margin-right: 4px; }
+  .badge.read { background: #dcfce7; color: var(--ok); }
+  .badge.loaned { background: #fee2e2; color: var(--danger); }
+  .book .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .icon-btn { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: .78rem; }
+  .icon-btn:hover { border-color: var(--accent); }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+  .modal { background: #fff; border-radius: 16px; padding: 20px; width: 100%; max-width: 480px; max-height: 90vh; overflow: auto; }
+  .modal h2 { margin-top: 0; font-size: 1.1rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid .full { grid-column: 1 / -1; }
+  label { font-size: .78rem; color: var(--muted); display: block; margin-bottom: 3px; }
+  .modal input, .modal select, .modal textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; }
+  .modal textarea { resize: vertical; min-height: 60px; }
+  .modal .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+  #scanWrap { background: #000; border-radius: 14px; overflow: hidden; position: relative; }
+  #video { width: 100%; display: block; }
+  #scanOverlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  #scanOverlay::before { content: ""; width: 70%; height: 40%; border: 3px solid rgba(255,255,255,.9); border-radius: 12px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); }
+  .hint { font-size: .8rem; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: .85rem; z-index: 100; animation: fade 3s forwards; }
+  @keyframes fade { 0%,80% {opacity:1} 100% {opacity:0} }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .filters select, .filters input { padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } header { padding: 12px; } header h1 { flex-basis: 100%; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>📚 Bibli-o-thèque</h1>
+  <span class="stats" id="stats"></span>
+  <nav class="tabs">
+    <button class="tab active" data-tab="list">Mes livres</button>
+    <button class="tab" data-tab="scan">Scanner</button>
+  </nav>
+</header>
+<main>
+  <section id="view-list">
+    <div class="toolbar">
+      <input class="field" id="search" placeholder="🔍 Rechercher titre, auteur, ISBN…" />
+      <button class="btn" id="btnAdd">+ Ajouter</button>
+      <button class="btn secondary" id="btnExport">⬇ Exporter</button>
+      <button class="btn secondary" id="btnImport">⬆ Importer</button>
+      <input type="file" id="importFile" accept=".json" hidden />
+    </div>
+    <div class="filters">
+      <select id="fStatus">
+        <option value="">Tous les statuts</option>
+        <option value="to-read">À lire</option>
+        <option value="reading">En lecture</option>
+        <option value="read">Lu</option>
+      </select>
+      <select id="fLoaned">
+        <option value="">Tous (prêts inclus)</option>
+        <option value="loaned">Prêtés uniquement</option>
+      </select>
+      <select id="fSort">
+        <option value="added">Récemment ajoutés</option>
+        <option value="title">Titre A→Z</option>
+        <option value="author">Auteur A→Z</option>
+        <option value="category">Catégorie</option>
+      </select>
+      <select id="fCategory"></select>
+    </div>
+    <div id="bookList"></div>
+  </section>
+
+  <section id="view-scan" hidden>
+    <div class="card">
+      <h2 style="margin:0 0 10px; font-size:1.05rem">📷 Scanner un code-barres (ISBN)</h2>
+      <div id="scanWrap" hidden>
+        <video id="video" playsinline muted></video>
+        <div id="scanOverlay"></div>
+      </div>
+      <div id="scanMsg" class="hint"></div>
+      <div class="toolbar" style="margin-top:12px">
+        <button class="btn" id="btnStartScan">Démarrer la caméra</button>
+        <button class="btn secondary" id="btnStopScan" hidden>Arrêter</button>
+      </div>
+      <div class="hint">
+        <strong>Compatibilité :</strong> la détection utilise l'API native <code>BarcodeDetector</code> (Chrome Android, etc.).
+        Sur iPhone / Safari, la bibliothèque ZXing est chargée automatiquement en repli.
+        <em>Note : ce repli nécessite un accès internet et ne s'active pas dans l'aperçu restreint — il fonctionne dans le fichier téléchargé et hébergé.</em>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0" />
+      <label>Saisie manuelle — ISBN ou code-barres</label>
+      <div class="toolbar" style="margin-bottom:0">
+        <input class="field" id="manualCode" placeholder="Ex. 9782070413119" inputmode="numeric" />
+        <button class="btn" id="btnManual">Ajouter</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="modalRoot"></div>
+
+<!-- Repli iPhone/Safari : bibliothèque ZXing (décodage logiciel des codes-barres).
+     Chargée en différé : si l'accès réseau est bloqué, l'app continue de fonctionner
+     avec l'API native (Android) et la saisie manuelle. -->
+<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js" onerror="window.__zxingFailed = true"></script>
+
+<script>
+"use strict";
+// ---------- Stockage ----------
+const KEY = "bibliotheque_books_v1";
+let books = [];
+try { books = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) { books = []; }
+const save = () => localStorage.setItem(KEY, JSON.stringify(books));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+// ---------- Utilitaires ----------
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(msg) {
+  const t = document.createElement("div");
+  t.className = "toast"; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+const STATUS = { "to-read": "À lire", "reading": "En lecture", "read": "Lu" };
+
+// ---------- Onglets ----------
+document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b === btn));
+  $("#view-list").hidden = btn.dataset.tab !== "list";
+  $("#view-scan").hidden = btn.dataset.tab !== "scan";
+  if (btn.dataset.tab !== "scan") stopScan();
+}));
+
+// ---------- Rendu liste ----------
+function render() {
+  const q = $("#search").value.trim().toLowerCase();
+  const st = $("#fStatus").value, ln = $("#fLoaned").value, sort = $("#fSort").value, cat = $("#fCategory").value;
+  let list = books.filter(b =>
+    (!q || [b.title, b.author, b.isbn].join(" ").toLowerCase().includes(q)) &&
+    (!st || b.status === st) &&
+    (!ln || b.loanedTo) &&
+    (!cat || (b.category || "") === cat)
+  );
+  if (sort === "title") list.sort((a, b) => a.title.localeCompare(b.title, "fr"));
+  else if (sort === "author") list.sort((a, b) => (a.author || "").localeCompare(b.author || "", "fr"));
+  else if (sort === "category") list.sort((a, b) => (a.category || "zzz").localeCompare(b.category || "zzz", "fr") || a.title.localeCompare(b.title, "fr"));
+  else list.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+
+  const read = books.filter(b => b.status === "read").length;
+  const loaned = books.filter(b => b.loanedTo).length;
+  $("#stats").textContent = `${books.length} livre(s) · ${read} lu(s) · ${loaned} prêté(s)`;
+
+  // Filtre par catégorie (reconstruit à chaque rendu)
+  const cats = [...new Set(books.map(b => b.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
+  const fCat = $("#fCategory");
+  const curCat = fCat.value;
+  fCat.innerHTML = `<option value="">Toutes les catégories</option>` +
+    cats.map(c => `<option value="${esc(c)}" ${c === curCat ? "selected" : ""}>${esc(c)}</option>`).join("");
+
+  const el = $("#bookList");
+  if (!list.length) {
+    el.innerHTML = `<div class="empty">Aucun livre à afficher.<br>Ajoutez-en un, ou scannez un ISBN depuis l'onglet Scanner 📷</div>`;
+    return;
+  }
+  el.innerHTML = list.map(b => `
+    <div class="card book">
+      <div class="cover">📖</div>
+      <div class="meta">
+        <h3>${esc(b.title)}</h3>
+        <div class="sub">${esc(b.author || "Auteur inconnu")}${b.isbn ? " · ISBN " + esc(b.isbn) : ""}${b.year ? " · " + esc(b.year) : ""}</div>
+        ${b.category ? `<span class="badge" style="background:#e0e7ff;color:#3730a3">${esc(b.category)}</span>` : ""}
+        <span class="badge ${b.status === "read" ? "read" : ""}">${STATUS[b.status] || b.status}</span>
+        ${b.loanedTo ? `<span class="badge loaned">Prêté à ${esc(b.loanedTo)}</span>` : ""}
+        ${b.notes ? `<div class="sub" style="margin-top:6px">📝 ${esc(b.notes)}</div>` : ""}
+      </div>
+      <div class="actions">
+        <button class="icon-btn" data-act="cycle" data-id="${b.id}">${b.status === "read" ? "↺ À lire" : b.status === "reading" ? "✓ Lu" : "▶ En lecture"}</button>
+        <button class="icon-btn" data-act="loan" data-id="${b.id}">${b.loanedTo ? "↩ Retour" : "📤 Prêter"}</button>
+        <button class="icon-btn" data-act="edit" data-id="${b.id}">✏️</button>
+        <button class="icon-btn" data-act="del" data-id="${b.id}">🗑️</button>
+      </div>
+    </div>`).join("");
+}
+
+$("#bookList").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn) return;
+  const book = books.find(b => b.id === btn.dataset.id);
+  if (!book) return;
+  const act = btn.dataset.act;
+  if (act === "cycle") {
+    book.status = book.status === "to-read" ? "reading" : book.status === "reading" ? "read" : "to-read";
+    save(); render();
+  } else if (act === "loan") {
+    if (book.loanedTo) { book.loanedTo = ""; toast("Retour enregistré ✅"); }
+    else {
+      const who = prompt("Prêté à qui ?");
+      if (who === null) return;
+      book.loanedTo = who.trim();
+      toast(book.loanedTo ? "Prêt enregistré 📤" : "Prêt annulé");
+    }
+    save(); render();
+  } else if (act === "edit") {
+    openModal(book);
+  } else if (act === "del") {
+    if (confirm(`Supprimer « ${book.title} » ?`)) {
+      books = books.filter(b => b.id !== book.id);
+      save(); render(); toast("Livre supprimé");
+    }
+  }
+});
+
+["#search", "#fStatus", "#fLoaned", "#fSort"].forEach(s => $(s).addEventListener("input", render));
+
+// ---------- Modale d'édition ----------
+function openModal(book) {
+  const isNew = !book;
+  book = book || { id: uid(), title: "", author: "", isbn: "", year: "", status: "to-read", notes: "", category: "", loanedTo: "", addedAt: Date.now() };
+  book.category = book.category || "";
+  const catList = [...new Set(books.map(b => b.category).filter(Boolean))];
+  $("#modalRoot").innerHTML = `
+  <div class="modal-bg" id="modalBg">
+    <div class="modal">
+      <h2>${isNew ? "➕ Ajouter un livre" : "✏️ Modifier le livre"}</h2>
+      <div class="grid">
+        <div class="full"><label>Titre *</label><input id="mTitle" value="${esc(book.title)}" ${book.title ? "" : "autofocus"} /></div>
+        <div><label>Auteur</label><input id="mAuthor" value="${esc(book.author)}" /></div>
+        <div><label>Année</label><input id="mYear" value="${esc(book.year)}" inputmode="numeric" /></div>
+        <div class="full"><label>ISBN / code-barres</label>
+          <div style="display:flex;gap:8px">
+            <input id="mIsbn" value="${esc(book.isbn)}" inputmode="numeric" style="flex:1" />
+            <button class="btn secondary" id="mFetch" title="Rechercher les infos sur Open Library à partir de l'ISBN">🌐</button>
+          </div>
+          <div class="hint" id="mFetchMsg"></div>
+        </div>
+        <div><label>Statut</label>
+          <select id="mStatus">
+            ${Object.entries(STATUS).map(([v, l]) => `<option value="${v}" ${book.status === v ? "selected" : ""}>${l}</option>`).join("")}
+          </select>
+        </div>
+        <div><label>Catégorie</label>
+          <input id="mCategory" value="${esc(book.category)}" list="catList" placeholder="Roman, BD, Science, …" />
+          <datalist id="catList">${catList.map(c => `<option value="${esc(c)}"></option>`).join("")}</datalist>
+        </div>
+        <div><label>Prêté à</label><input id="mLoan" value="${esc(book.loanedTo)}" placeholder="(vide si non prêté)" /></div>
+        <div class="full"><label>Notes / résumé</label><textarea id="mNotes" placeholder="Résumé, avis… (ou cliquez sur 🌐 pour l'importer)">${esc(book.notes)}</textarea></div>
+      </div>
+      <div class="row">
+        <button class="btn secondary" id="mCancel">Annuler</button>
+        <button class="btn" id="mSave">Enregistrer</button>
+      </div>
+    </div>
+  </div>`;
+  $("#mCancel").onclick = closeModal;
+  $("#modalBg").onclick = (e) => { if (e.target === $("#modalBg")) closeModal(); };
+  $("#mFetch").onclick = async () => {
+    const isbn = $("#mIsbn").value.replace(/\D/g, "");
+    const msg = $("#mFetchMsg");
+    if (!isbn) { msg.textContent = "⚠️ Entrez d'abord un ISBN."; return; }
+    msg.textContent = "🔎 Recherche (Google Books, puis Open Library)…";
+    const data = await fetchBookInfo(isbn);
+    if (data) {
+      if (!$("#mTitle").value) $("#mTitle").value = data.title;
+      if (!$("#mAuthor").value) $("#mAuthor").value = data.author;
+      if (!$("#mYear").value && data.year) $("#mYear").value = data.year;
+      if (!$("#mNotes").value && data.summary) $("#mNotes").value = data.summary;
+      if (!$("#mCategory").value && data.subjects.length) $("#mCategory").value = data.subjects[0];
+      msg.textContent = `✅ Fiche trouvée (${data.source}) et complétée (champs vides uniquement).`;
+    } else {
+      msg.textContent = "❌ Aucune fiche trouvée (ou pas d'accès internet). Complétez manuellement.";
+    }
+  };
+  $("#mSave").onclick = () => {
+    const title = $("#mTitle").value.trim();
+    if (!title) { alert("Le titre est obligatoire."); return; }
+    Object.assign(book, {
+      title, author: $("#mAuthor").value.trim(), year: $("#mYear").value.trim(),
+      isbn: $("#mIsbn").value.trim(), status: $("#mStatus").value,
+      category: $("#mCategory").value.trim(),
+      loanedTo: $("#mLoan").value.trim(), notes: $("#mNotes").value.trim()
+    });
+    if (isNew) books.push(book);
+    save(); closeModal(); render();
+    toast(isNew ? "Livre ajouté 🎉" : "Modifications enregistrées");
+  };
+}
+const closeModal = () => { $("#modalRoot").innerHTML = ""; };
+$("#btnAdd").addEventListener("click", () => openModal(null));
+
+// ---------- Export / Import ----------
+$("#btnExport").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(books, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "ma-bibliotheque.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+$("#btnImport").addEventListener("click", () => $("#importFile").click());
+$("#importFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (!Array.isArray(data)) throw new Error();
+    const ids = new Set(books.map(b => b.id || b.isbn || b.title));
+    let added = 0;
+    for (const b of data) {
+      if (!b || !b.title) continue;
+      if (ids.has(b.id || b.isbn || b.title)) continue;
+      books.push({ id: b.id || uid(), title: b.title, author: b.author || "", isbn: b.isbn || "", year: b.year || "", status: b.status || "to-read", notes: b.notes || "", category: b.category || "", loanedTo: b.loanedTo || "", addedAt: b.addedAt || Date.now() });
+      added++;
+    }
+    save(); render();
+    toast(`Import : ${added} livre(s) ajouté(s)`);
+  } catch { toast("Fichier JSON invalide"); }
+  e.target.value = "";
+});
+
+// ---------- Scan codes-barres ----------
+let stream = null, scanTimer = null, detector = null;
+
+function scanMsg(html) { $("#scanMsg").innerHTML = html; }
+
+async function startScan() {
+  scanMsg("");
+  const hasNative = "BarcodeDetector" in window;
+  const hasZxing = typeof window.ZXing !== "undefined" && window.ZXing.BrowserMultiFormatReader;
+  if (!hasNative && !hasZxing) {
+    scanMsg(hasNative || !window.__zxingFailed
+      ? "⚠️ Aucun moteur de détection disponible. Utilisez la saisie manuelle ci-dessous."
+      : "⚠️ Ni l'API native ni la bibliothèque ZXing ne sont disponibles (accès réseau bloqué dans cet aperçu). Utilisez la saisie manuelle ci-dessous — sur votre serveur, le repli iPhone fonctionnera.");
+    return;
+  }
+  try {
+    if (hasNative) {
+      detector = { type: "native", det: new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "qr_code"] }) };
+    } else {
+      detector = { type: "zxing" };
+      // Décodage logiciel : on analyse chaque image du flux vidéo nous-mêmes,
+      // ce qui garde le rendu du cadre de visée et marche aussi sur iPhone/Safari.
+      detector.zxingReader = new window.ZXing.MultiFormatReader();
+      detector.zxingHints = null;
+    }
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    const video = $("#video");
+    video.srcObject = stream;
+    await video.play();
+    $("#scanWrap").hidden = false;
+    $("#btnStartScan").hidden = true;
+    $("#btnStopScan").hidden = false;
+    scanMsg(`Moteur : ${hasNative ? "natif" : "ZXing (repli iOS)"}. Alignez le code-barres dans le cadre…`);
+    scanTimer = setInterval(async () => {
+      try {
+        let code = "";
+        if (detector.type === "native") {
+          const codes = await detector.det.detect(video);
+          if (codes.length) code = codes[0].rawValue;
+        } else {
+          // Décodage ZXing à partir d'une image du flux vidéo
+          const cnv = document.createElement("canvas");
+          cnv.width = video.videoWidth; cnv.height = video.videoHeight;
+          if (!cnv.width) return;
+          cnv.getContext("2d").drawImage(video, 0, 0);
+          const lum = new window.ZXing.HTMLCanvasElementLuminanceSource(cnv);
+          const bin = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(lum));
+          const result = detector.zxingReader.decode(bin, detector.zxingHints);
+          if (result) code = result.getText();
+        }
+        if (code) {
+          code = code.replace(/\D/g, "");
+          stopScan();
+          handleScannedCode(code);
+        }
+      } catch (e) { /* frame non analysable, on continue */ }
+    }, 500);
+  } catch (err) {
+    scanMsg("❌ Impossible d'accéder à la caméra. Vérifiez les permissions du navigateur et que la page est servie en HTTPS (ou ouverte en local). <em>(" + esc(err.name) + ")</em>");
+  }
+}
+
+function stopScan() {
+  if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  $("#scanWrap").hidden = true;
+  $("#btnStartScan").hidden = false;
+  $("#btnStopScan").hidden = true;
+}
+
+$("#btnStartScan").addEventListener("click", startScan);
+$("#btnStopScan").addEventListener("click", stopScan);
+
+// ---------- Récupération des infos depuis internet ----------
+// Recherche en cascade : Google Books (excellente couverture des éditions françaises),
+// puis Open Library en secours. Retourne null si aucune fiche n'est trouvée.
+async function fetchFromGoogleBooks(isbn) {
+  try {
+    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&country=FR`, { signal: AbortSignal.timeout(8000) });
+    const data = await res.json();
+    const item = data.items && data.items[0] && data.items[0].volumeInfo;
+    if (!item || !item.title) return null;
+    return {
+      title: item.title,
+      author: (item.authors || []).join(", "),
+      year: item.publishedDate ? String(item.publishedDate).slice(0, 4) : "",
+      summary: item.description ? String(item.description).replace(/<[^>]+>/g, "") : "",
+      subjects: (item.categories || []).slice(0, 5)
+    };
+  } catch (e) { return null; }
+}
+
+async function fetchFromOpenLibrary(isbn) {
+  try {
+    const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`, { signal: AbortSignal.timeout(8000) });
+    const data = await res.json();
+    const rec = data && data["ISBN:" + isbn];
+    if (!rec || !rec.title) return null;
+    const summary = rec.excerpts && rec.excerpts[0] && rec.excerpts[0].text
+      ? rec.excerpts[0].text
+      : (rec.notes ? String(rec.notes) : "");
+    return {
+      title: rec.title,
+      author: rec.authors && rec.authors[0] ? rec.authors[0].name.replace(/^([^,]+),\s*(.+)$/, "$2 $1") : "",
+      year: rec.publish_date ? String(rec.publish_date).match(/\d{4}/)?.[0] : "",
+      summary,
+      subjects: (rec.subjects || []).map(s => s.name).filter(n => n && n.length < 30).slice(0, 5)
+    };
+  } catch (e) {
+    return null; // pas d'accès internet, fiche introuvable, etc.
+  }
+}
+
+async function fetchBookInfo(isbn) {
+  const g = await fetchFromGoogleBooks(isbn);
+  if (g && (g.summary || g.author)) return { ...g, source: "Google Books" };
+  const o = await fetchFromOpenLibrary(isbn);
+  if (o) return { ...o, source: "Open Library" };
+  return g ? { ...g, source: "Google Books" } : null;
+}
+
+// ---------- Traitement d'un code scanné / saisi ----------
+async function handleScannedCode(code) {
+  if (!code) return;
+  const existing = books.find(b => b.isbn === code);
+  if (existing) {
+    toast(`« ${existing.title} » est déjà dans votre bibliothèque`);
+    openModal(existing);
+    return;
+  }
+  scanMsg(`Code détecté : <strong>${esc(code)}</strong> — recherche des infos (Google Books, puis Open Library)…`);
+  const draft = { id: uid(), title: "", author: "", isbn: code, year: "", status: "to-read", notes: "", category: "", loanedTo: "", addedAt: Date.now() };
+  const info = await fetchBookInfo(code);
+  if (info) {
+    draft.title = info.title;
+    draft.author = info.author;
+    draft.year = info.year;
+    if (info.summary) draft.notes = info.summary;
+    if (info.subjects.length) draft.category = info.subjects[0];
+    scanMsg(`✅ « ${esc(info.title)} » trouvé sur ${info.source}. Vérifiez et complétez la fiche…`);
+  } else {
+    scanMsg(`Code : <strong>${esc(code)}</strong> — aucune fiche trouvée (ou hors ligne), complétez manuellement…`);
+  }
+  openModal(draft);
+}
+
+$("#btnManual").addEventListener("click", () => handleScannedCode($("#manualCode").value.replace(/\D/g, "")));
+$("#manualCode").addEventListener("keydown", (e) => { if (e.key === "Enter") handleScannedCode(e.target.value.replace(/\D/g, "")); });
+
+// ---------- Init ----------
+render();
+</script>
+</body>
+</html>
