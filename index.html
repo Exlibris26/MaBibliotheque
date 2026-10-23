@@ -200,7 +200,7 @@ function render() {
     return;
   }
   el.innerHTML = list.map(b => `
-    <div class="card book">
+    <div class="card book" data-act="view" data-id="${b.id}" style="cursor:pointer" title="Cliquez pour ouvrir la fiche">
       <div class="cover">${b.cover ? `<img src="${esc(b.cover)}" alt="Couverture" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.outerHTML='📖'" />` : "📖"}</div>
       <div class="meta">
         <h3>${esc(b.title)}</h3>
@@ -221,7 +221,12 @@ function render() {
 
 $("#bookList").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-act]");
-  if (!btn) return;
+  if (!btn) {
+    // Clic sur la carte elle-même (hors boutons) : ouvrir la fiche lisible
+    const card = e.target.closest("[data-act='view']");
+    if (card) { const b = books.find(x => x.id === card.dataset.id); if (b) openFiche(b); }
+    return;
+  }
   const book = books.find(b => b.id === btn.dataset.id);
   if (!book) return;
   const act = btn.dataset.act;
@@ -248,6 +253,43 @@ $("#bookList").addEventListener("click", (e) => {
 });
 
 ["#search", "#fStatus", "#fLoaned", "#fSort"].forEach(s => $(s).addEventListener("input", render));
+
+// ---------- Fiche lisible (vue détaillée) ----------
+function openFiche(book) {
+  const stars = book.rating ? "⭐".repeat(Math.round(book.rating)) + ` <span class="sub">${book.rating}/5</span>` : "";
+  $("#modalRoot").innerHTML = `
+  <div class="modal-bg" id="modalBg">
+    <div class="modal" style="max-width:680px">
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+        ${book.cover
+          ? `<img src="${esc(book.cover)}" alt="Couverture" style="width:150px;min-width:120px;box-shadow:0 4px 12px rgba(0,0,0,.25);border-radius:6px" onerror="this.style.display='none'" />`
+          : `<div style="width:150px;min-width:120px;height:220px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:3rem;border-radius:6px;border:1px solid var(--border)">📖</div>`}
+        <div style="flex:1;min-width:240px">
+          <h2 style="margin:0 0 4px">${esc(book.title)}</h2>
+          <div style="font-size:1.05rem;color:#6b5d4f;margin-bottom:10px">✍️ ${esc(book.author || "Auteur inconnu")}</div>
+          ${stars ? `<div style="margin-bottom:10px">${stars}</div>` : ""}
+          <div style="margin-bottom:8px">
+            <span class="badge ${book.status === "read" ? "read" : ""}">${STATUS[book.status] || book.status}</span>
+            ${book.category ? `<span class="badge" style="background:#e0e7ff;color:#3730a3">${esc(book.category)}</span>` : ""}
+            ${book.loanedTo ? `<span class="badge loaned">Prêté à ${esc(book.loanedTo)}</span>` : ""}
+          </div>
+          <div class="sub" style="line-height:1.7">
+            ${[book.year, book.publisher, book.pages ? book.pages + " pages" : "", book.isbn ? "ISBN " + book.isbn : ""].filter(Boolean).map(esc).join(" · ")}
+          </div>
+          ${book.preview ? `<div style="margin-top:6px"><a href="${esc(book.preview)}" target="_blank" rel="noopener">🔗 Voir sur Google Books</a></div>` : ""}
+        </div>
+      </div>
+      ${book.notes ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);line-height:1.65;white-space:pre-wrap">${esc(book.notes)}</div>` : ""}
+      <div class="row" style="margin-top:16px">
+        <button class="btn secondary" id="fClose">Fermer</button>
+        <button class="btn" id="fEdit">✏️ Modifier</button>
+      </div>
+    </div>
+  </div>`;
+  $("#fClose").onclick = closeModal;
+  $("#modalBg").onclick = (e) => { if (e.target === $("#modalBg")) closeModal(); };
+  $("#fEdit").onclick = () => { closeModal(); openModal(book); };
+}
 
 // ---------- Modale d'édition ----------
 function openModal(book) {
