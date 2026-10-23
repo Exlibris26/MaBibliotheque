@@ -308,17 +308,21 @@ function openModal(book) {
     }
   };
   $("#mSave").onclick = () => {
-    const title = $("#mTitle").value.trim();
-    if (!title) { alert("Le titre est obligatoire."); return; }
-    Object.assign(book, {
-      title, author: $("#mAuthor").value.trim(), year: $("#mYear").value.trim(),
-      isbn: $("#mIsbn").value.trim(), status: $("#mStatus").value,
-      category: $("#mCategory").value.trim(),
-      loanedTo: $("#mLoan").value.trim(), notes: $("#mNotes").value.trim()
-    });
-    if (isNew) books.push(book);
-    save(); closeModal(); render();
-    toast(isNew ? "Livre ajouté 🎉" : "Modifications enregistrées");
+    try {
+      const title = $("#mTitle").value.trim();
+      if (!title) { alert("Le titre est obligatoire."); return; }
+      Object.assign(book, {
+        title, author: $("#mAuthor").value.trim(), year: $("#mYear").value.trim(),
+        isbn: $("#mIsbn").value.trim(), status: $("#mStatus").value,
+        category: $("#mCategory").value.trim(),
+        loanedTo: $("#mLoan").value.trim(), notes: $("#mNotes").value.trim()
+      });
+      if (isNew) books.push(book);
+      save(); closeModal(); render();
+      toast(isNew ? "Livre ajouté 🎉" : "Modifications enregistrées");
+    } catch (err) {
+      toast("❌ Erreur d'enregistrement : " + (err && err.name ? err.name + " — " + err.message : String(err)));
+    }
   };
 }
 const closeModal = () => { $("#modalRoot").innerHTML = ""; };
@@ -523,6 +527,10 @@ $("#btnManual").addEventListener("click", () => handleScannedCode($("#manualCode
 $("#manualCode").addEventListener("keydown", (e) => { if (e.key === "Enter") handleScannedCode(e.target.value.replace(/\D/g, "")); });
 
 // ---------- Init ----------
+// Toute erreur JavaScript imprévue est affichée à l'écran au lieu de rester invisible
+window.addEventListener("error", (e) => {
+  try { toast("⚠️ Erreur inattendue : " + (e.message || "inconnue")); } catch (err) {}
+});
 render();
 </script>
 </body>
