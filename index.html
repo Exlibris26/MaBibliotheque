@@ -122,6 +122,13 @@
         <input class="field" id="manualCode" placeholder="Ex. 9782070413119" inputmode="numeric" />
         <button class="btn" id="btnManual">Ajouter</button>
       </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0" />
+      <label>Clé API Google Books (facultative mais recommandée)</label>
+      <div class="toolbar" style="margin-bottom:0">
+        <input class="field" id="apiKey" placeholder="Collez ici votre clé API si les recherches affichent « code 429 »" />
+        <button class="btn secondary" id="btnSaveKey">Mémoriser</button>
+      </div>
+      <div class="hint" id="keyMsg">Sans clé, Google limite fortement les recherches (erreur « code 429 »). Une clé gratuite (1000 recherches/jour) corrige ce problème durablement. La clé reste enregistrée uniquement dans ce navigateur.</div>
     </div>
   </section>
 </main>
@@ -420,16 +427,27 @@ function stopScan() {
 $("#btnStartScan").addEventListener("click", startScan);
 $("#btnStopScan").addEventListener("click", stopScan);
 
+// ---------- Clé API Google Books (stockée localement, facultative) ----------
+const KEYSTORE = "bibliotheque_google_api_key";
+const getApiKey = () => (localStorage.getItem(KEYSTORE) || "").trim();
+$("#apiKey").value = getApiKey();
+$("#btnSaveKey").addEventListener("click", () => {
+  localStorage.setItem(KEYSTORE, $("#apiKey").value.trim());
+  $("#keyMsg").textContent = getApiKey() ? "✅ Clé enregistrée. Les recherches Google Books utilisent désormais votre quota personnel." : "Clé effacée.";
+});
+
 // ---------- Récupération des infos depuis internet ----------
 // Recherche en cascade : Google Books (excellente couverture des éditions françaises),
 // puis Open Library en secours. Diagnostics précis : chaque échec est identifié
 // (« introuvable » vs « API injoignable ») pour ne pas tromper l'utilisateur.
 async function fetchFromGoogleBooks(isbn) {
   try {
+    const key = getApiKey();
+    const auth = key ? `&key=${encodeURIComponent(key)}` : "";
     // Sans paramètre country, l'API répond parfois 429 ; on essaie FR puis US.
-    let res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&country=FR`, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&country=US`, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return { error: `API Google Books inaccessible (code ${res.status})` };
+    let res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&country=FR${auth}`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&country=US${auth}`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return { error: `API Google Books inaccessible (code ${res.status}${res.status === 429 && !key ? " — quota public épuisé, ajoutez une clé API gratuite" : ""})` };
     const data = await res.json();
     const item = data.items && data.items[0] && data.items[0].volumeInfo;
     if (!item || !item.title) return { error: "ISBN inconnu de Google Books" };
