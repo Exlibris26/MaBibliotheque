@@ -251,7 +251,9 @@ $("#bookList").addEventListener("click", (e) => {
 
 // ---------- Modale d'édition ----------
 function openModal(book) {
-  const isNew = !book;
+  // Nouveau livre : soit aucune fiche transmise, soit une fiche pré-remplie
+  // (issue d'un scan) qui n'est pas encore dans la bibliothèque.
+  const isNew = !book || !books.some(b => b.id === book.id);
   book = book || { id: uid(), title: "", author: "", isbn: "", year: "", status: "to-read", notes: "", category: "", loanedTo: "", addedAt: Date.now() };
   book.category = book.category || "";
   const catList = [...new Set(books.map(b => b.category).filter(Boolean))];
