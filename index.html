@@ -201,10 +201,10 @@ function render() {
   }
   el.innerHTML = list.map(b => `
     <div class="card book">
-      <div class="cover">📖</div>
+      <div class="cover">${b.cover ? `<img src="${esc(b.cover)}" alt="Couverture" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.outerHTML='📖'" />` : "📖"}</div>
       <div class="meta">
         <h3>${esc(b.title)}</h3>
-        <div class="sub">${esc(b.author || "Auteur inconnu")}${b.isbn ? " · ISBN " + esc(b.isbn) : ""}${b.year ? " · " + esc(b.year) : ""}</div>
+        <div class="sub">${esc(b.author || "Auteur inconnu")}${b.isbn ? " · ISBN " + esc(b.isbn) : ""}${b.year ? " · " + esc(b.year) : ""}${b.publisher ? " · " + esc(b.publisher) : ""}${b.pages ? " · " + esc(b.pages) + " p." : ""}</div>
         ${b.category ? `<span class="badge" style="background:#e0e7ff;color:#3730a3">${esc(b.category)}</span>` : ""}
         <span class="badge ${b.status === "read" ? "read" : ""}">${STATUS[b.status] || b.status}</span>
         ${b.loanedTo ? `<span class="badge loaned">Prêté à ${esc(b.loanedTo)}</span>` : ""}
@@ -282,7 +282,17 @@ function openModal(book) {
           <datalist id="catList">${catList.map(c => `<option value="${esc(c)}"></option>`).join("")}</datalist>
         </div>
         <div><label>Prêté à</label><input id="mLoan" value="${esc(book.loanedTo)}" placeholder="(vide si non prêté)" /></div>
+        <div><label>Éditeur</label><input id="mPub" value="${esc(book.publisher || "")}" placeholder="Ex. Gallimard" /></div>
+        <div><label>Pages</label><input id="mPages" value="${esc(book.pages || "")}" inputmode="numeric" /></div>
         <div class="full"><label>Notes / résumé</label><textarea id="mNotes" placeholder="Résumé, avis… (ou cliquez sur 🌐 pour l'importer)">${esc(book.notes)}</textarea></div>
+        ${book.cover || book.preview ? `<div class="full" style="display:flex;gap:12px;align-items:center">
+          ${book.cover ? `<img src="${esc(book.cover)}" alt="Couverture" style="height:90px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.2)" onerror="this.style.display='none'" />` : ""}
+          <div>
+            <div class="sub">${esc(book.publisher || "")}${book.pages ? " · " + esc(book.pages) + " pages" : ""}</div>
+            ${book.rating ? `<div class="sub">⭐ Note Google : ${esc(book.rating)}/5</div>` : ""}
+            ${book.preview ? `<a href="${esc(book.preview)}" target="_blank" rel="noopener">🔗 Aperçu / fiche en ligne</a>` : ""}
+          </div>
+        </div>` : ""}
       </div>
       <div class="row">
         <button class="btn secondary" id="mCancel">Annuler</button>
@@ -292,22 +302,35 @@ function openModal(book) {
   </div>`;
   $("#mCancel").onclick = closeModal;
   $("#modalBg").onclick = (e) => { if (e.target === $("#modalBg")) closeModal(); };
+  const applyInfo = (data, msg, byTitle) => {
+    if (!$("#mTitle").value) $("#mTitle").value = data.title;
+    if (!$("#mAuthor").value) $("#mAuthor").value = data.author;
+    if (!$("#mYear").value && data.year) $("#mYear").value = data.year;
+    if (!$("#mNotes").value && data.summary) $("#mNotes").value = data.summary;
+    if (!$("#mCategory").value && data.subjects.length) $("#mCategory").value = data.subjects[0];
+    if (!$("#mPub").value && data.publisher) $("#mPub").value = data.publisher;
+    if (!$("#mPages").value && data.pages) $("#mPages").value = data.pages;
+    book.cover = data.cover || book.cover || "";
+    book.preview = data.preview || book.preview || "";
+    book.rating = data.rating || book.rating || "";
+    msg.textContent = `✅ Fiche trouvée (${data.source}) et complétée (champs vides uniquement).`;
+  };
   $("#mFetch").onclick = async () => {
     const isbn = $("#mIsbn").value.replace(/\D/g, "");
     const msg = $("#mFetchMsg");
-    if (!isbn) { msg.textContent = "⚠️ Entrez d'abord un ISBN."; return; }
-    msg.textContent = "🔎 Recherche (Google Books, puis Open Library)…";
-    const data = await fetchBookInfo(isbn);
-    if (data && !data.error) {
-      if (!$("#mTitle").value) $("#mTitle").value = data.title;
-      if (!$("#mAuthor").value) $("#mAuthor").value = data.author;
-      if (!$("#mYear").value && data.year) $("#mYear").value = data.year;
-      if (!$("#mNotes").value && data.summary) $("#mNotes").value = data.summary;
-      if (!$("#mCategory").value && data.subjects.length) $("#mCategory").value = data.subjects[0];
-      msg.textContent = `✅ Fiche trouvée (${data.source}) et complétée (champs vides uniquement).`;
-    } else {
-      msg.textContent = `❌ ${data && data.error ? data.error : "Aucune fiche trouvée."} Complétez manuellement.`;
+    if (isbn) {
+      msg.textContent = "🔎 Recherche par ISBN (Google Books, puis Open Library)…";
+      const data = await fetchBookInfo(isbn);
+      if (data && !data.error) { applyInfo(data, msg); return; }
+      msg.textContent = `ISBN : ${data.error}.`;
     }
+    // L'ISBN a échoué (ou est absent) : si un titre est saisi, on cherche par titre.
+    const title = $("#mTitle").value.trim();
+    if (!title) { msg.textContent = "⚠️ Entrez un ISBN ou un titre, puis cliquez sur 🌐."; return; }
+    msg.textContent = "🔎 Recherche par titre…";
+    const byTitle = await fetchBookInfoByTitle(title, $("#mAuthor").value.trim());
+    if (byTitle && !byTitle.error) { applyInfo(byTitle, msg); return; }
+    msg.textContent = `❌ ${byTitle ? byTitle.error : "échec"}. Complétez manuellement.`;
   };
   $("#mSave").onclick = () => {
     try {
@@ -317,7 +340,8 @@ function openModal(book) {
         title, author: $("#mAuthor").value.trim(), year: $("#mYear").value.trim(),
         isbn: $("#mIsbn").value.trim(), status: $("#mStatus").value,
         category: $("#mCategory").value.trim(),
-        loanedTo: $("#mLoan").value.trim(), notes: $("#mNotes").value.trim()
+        loanedTo: $("#mLoan").value.trim(), notes: $("#mNotes").value.trim(),
+        publisher: $("#mPub").value.trim(), pages: $("#mPages").value.trim()
       });
       if (isNew) books.push(book);
       save(); closeModal(); render();
@@ -351,7 +375,7 @@ $("#importFile").addEventListener("change", async (e) => {
     for (const b of data) {
       if (!b || !b.title) continue;
       if (ids.has(b.id || b.isbn || b.title)) continue;
-      books.push({ id: b.id || uid(), title: b.title, author: b.author || "", isbn: b.isbn || "", year: b.year || "", status: b.status || "to-read", notes: b.notes || "", category: b.category || "", loanedTo: b.loanedTo || "", addedAt: b.addedAt || Date.now() });
+      books.push({ id: b.id || uid(), title: b.title, author: b.author || "", isbn: b.isbn || "", year: b.year || "", status: b.status || "to-read", notes: b.notes || "", category: b.category || "", loanedTo: b.loanedTo || "", publisher: b.publisher || "", pages: b.pages || "", cover: b.cover || "", preview: b.preview || "", rating: b.rating || "", addedAt: b.addedAt || Date.now() });
       added++;
     }
     save(); render();
@@ -468,7 +492,13 @@ async function fetchFromGoogleBooks(isbn) {
       author: (item.authors || []).join(", "),
       year: item.publishedDate ? String(item.publishedDate).slice(0, 4) : "",
       summary: item.description ? String(item.description).replace(/<[^>]+>/g, "") : "",
-      subjects: (item.categories || []).slice(0, 5)
+      subjects: (item.categories || []).slice(0, 5),
+      publisher: item.publisher || "",
+      pages: item.pageCount || "",
+      lang: item.language || "",
+      rating: item.averageRating || "",
+      cover: (item.imageLinks && (item.imageLinks.thumbnail || item.imageLinks.smallThumbnail)) || "",
+      preview: (data.items[0].volumeInfo && data.items[0].volumeInfo.previewLink) || (data.items[0] && data.items[0].accessInfo && data.items[0].accessInfo.webReaderLink) || ""
     };
   } catch (e) { return { error: "réseau bloqué ou hors ligne (Google Books)" }; }
 }
@@ -487,7 +517,12 @@ async function fetchFromOpenLibrary(isbn) {
       author: rec.authors && rec.authors[0] ? rec.authors[0].name.replace(/^([^,]+),\s*(.+)$/, "$2 $1") : "",
       year: rec.publish_date ? String(rec.publish_date).match(/\d{4}/)?.[0] : "",
       summary,
-      subjects: (rec.subjects || []).map(s => s.name).filter(n => n && n.length < 30).slice(0, 5)
+      subjects: (rec.subjects || []).map(s => s.name).filter(n => n && n.length < 30).slice(0, 5),
+      publisher: (rec.publishers && rec.publishers[0]) || "",
+      pages: rec.number_of_pages || "",
+      lang: (rec.languages && rec.languages[0] && rec.languages[0].key) ? rec.languages[0].key.replace("/languages/", "") : "",
+      cover: (rec.cover && (rec.cover.medium || rec.cover.small || rec.cover.large)) || "",
+      preview: rec.url || ""
     };
   } catch (e) {
     return { error: "réseau bloqué ou hors ligne (Open Library)" };
@@ -504,6 +539,38 @@ async function fetchBookInfo(isbn) {
   if (o && o.error) errors.push(o.error);
   if (g && !g.error) return { ...g, source: "Google Books" }; // fiche trouvée mais sommaire
   return { error: errors.join(" ; ") || "aucune réponse" };
+}
+
+// Recherche par titre (+ auteur) : secours quand l'ISBN est inconnu,
+// fréquent pour les éditeurs français qui ne transmettent pas leurs
+// métadonnées ISBN à Google Books.
+async function fetchBookInfoByTitle(title, author) {
+  try {
+    let q = `intitle:"${title}"`;
+    if (author) q += ` inauthor:"${author}"`;
+    const key = getApiKey();
+    const auth = key ? `&key=${encodeURIComponent(key)}` : "";
+    let res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=fr&maxResults=5&country=FR${auth}`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=fr&maxResults=5&country=US${auth}`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return { error: `API Google Books inaccessible (code ${res.status})` };
+    const data = await res.json();
+    const item = data.items && data.items[0] && data.items[0].volumeInfo;
+    if (!item || !item.title) return { error: "titre introuvable" };
+    return {
+      title: item.title,
+      author: (item.authors || []).join(", "),
+      year: item.publishedDate ? String(item.publishedDate).slice(0, 4) : "",
+      summary: item.description ? String(item.description).replace(/<[^>]+>/g, "") : "",
+      subjects: (item.categories || []).slice(0, 5),
+      publisher: item.publisher || "",
+      pages: item.pageCount || "",
+      lang: item.language || "",
+      rating: item.averageRating || "",
+      cover: (item.imageLinks && (item.imageLinks.thumbnail || item.imageLinks.smallThumbnail)) || "",
+      preview: item.previewLink || "",
+      source: "Google Books (par titre)"
+    };
+  } catch (e) { return { error: "réseau bloqué ou hors ligne (Google Books)" }; }
 }
 
 // ---------- Traitement d'un code scanné / saisi ----------
@@ -524,6 +591,11 @@ async function handleScannedCode(code) {
     draft.year = info.year;
     if (info.summary) draft.notes = info.summary;
     if (info.subjects.length) draft.category = info.subjects[0];
+    draft.publisher = info.publisher || "";
+    draft.pages = info.pages || "";
+    draft.cover = info.cover || "";
+    draft.preview = info.preview || "";
+    draft.rating = info.rating || "";
     scanMsg(`✅ « ${esc(info.title)} » trouvé sur ${info.source}. Vérifiez et complétez la fiche…`);
   } else {
     scanMsg(`Code : <strong>${esc(code)}</strong> — ${esc(info && info.error ? info.error : "aucune fiche trouvée")}. Complétez manuellement…`);
