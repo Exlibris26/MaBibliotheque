@@ -558,19 +558,34 @@ async function fetchBookInfo(isbn) {
 // métadonnées ISBN à Google Books.
 async function fetchBookInfoByTitle(title, author) {
   try {
-    let q = `intitle:"${title}"`;
-    if (author) q += ` inauthor:"${author}"`;
     const key = getApiKey();
     const auth = key ? `&key=${encodeURIComponent(key)}` : "";
-    let res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=fr&maxResults=5&country=FR${auth}`, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=fr&maxResults=5&country=US${auth}`, { signal: AbortSignal.timeout(8000) });
+    const gb = (q, extra) => fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=10&country=FR${extra || ""}${auth}`, { signal: AbortSignal.timeout(8000) })
+      .then(r => r.ok ? r : fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=10&country=US${extra || ""}${auth}`, { signal: AbortSignal.timeout(8000) }));
+    const pickBest = (data) => {
+      const items = (data.items || []).map(i => i.volumeInfo).filter(v => v && v.title);
+      if (!items.length) return null;
+      const score = v => (v.language === "fr" ? 100 : 0) + (v.description ? 10 : 0) + (v.publisher ? 5 : 0) + (v.imageLinks ? 5 : 0);
+      return items.sort((a, b) => score(b) - score(a))[0];
+    };
+    // 1) recherche stricte : titre exact entre guillemets, éventuellement avec l'auteur
+    let q = author ? `intitle:"${title}" inauthor:"${author}"` : `intitle:"${title}"`;
+    let res = await gb(q, "&langRestrict=fr");
     if (!res.ok) return { error: `API Google Books inaccessible (code ${res.status})` };
-    const data = await res.json();
-    const items = (data.items || []).map(i => i.volumeInfo).filter(v => v && v.title);
-    if (!items.length) return { error: "titre introuvable" };
-    // Priorité aux éditions en français, puis à la fiche la plus renseignée
-    const score = v => (v.language === "fr" ? 100 : 0) + (v.description ? 10 : 0) + (v.publisher ? 5 : 0) + (v.imageLinks ? 5 : 0);
-    const item = items.sort((a, b) => score(b) - score(a))[0];
+    let item = pickBest(await res.json());
+    // 2) recherche stricte sans contrainte de langue
+    if (!item) {
+      res = await gb(q, "");
+      if (!res.ok) return { error: `API Google Books inaccessible (code ${res.status})` };
+      item = pickBest(await res.json());
+    }
+    // 3) recherche libre : titre + auteur comme simples mots-clés
+    if (!item) {
+      res = await gb(author ? `${title} ${author}` : title, "");
+      if (!res.ok) return { error: `API Google Books inaccessible (code ${res.status})` };
+      item = pickBest(await res.json());
+    }
+    if (!item) return { error: "titre introuvable" };
     return {
       title: item.title,
       author: (item.authors || []).join(", "),
