@@ -518,7 +518,7 @@ async function fetchFromOpenLibrary(isbn) {
       year: rec.publish_date ? String(rec.publish_date).match(/\d{4}/)?.[0] : "",
       summary,
       subjects: (rec.subjects || []).map(s => s.name).filter(n => n && n.length < 30).slice(0, 5),
-      publisher: (rec.publishers && rec.publishers[0]) || "",
+      publisher: (rec.publishers && rec.publishers[0]) ? (typeof rec.publishers[0] === "string" ? rec.publishers[0] : (rec.publishers[0].name || "")) : "",
       pages: rec.number_of_pages || "",
       lang: (rec.languages && rec.languages[0] && rec.languages[0].key) ? rec.languages[0].key.replace("/languages/", "") : "",
       cover: (rec.cover && (rec.cover.medium || rec.cover.small || rec.cover.large)) || "",
@@ -531,8 +531,20 @@ async function fetchFromOpenLibrary(isbn) {
 
 async function fetchBookInfo(isbn) {
   const errors = [];
-  const g = await fetchFromGoogleBooks(isbn);
-  if (g && !g.error && (g.summary || g.author)) return { ...g, source: "Google Books" };
+  let g = await fetchFromGoogleBooks(isbn);
+  if (g && !g.error) {
+    // Fiche incomplète (résumé ou éditeur manquant) : on essaie de la compléter
+    // via une recherche par titre — une autre édition est souvent mieux renseignée.
+    if (!g.summary || !g.publisher || !g.cover) {
+      const byTitle = await fetchBookInfoByTitle(g.title, g.author);
+      if (byTitle && !byTitle.error) {
+        for (const k of ["summary", "publisher", "cover", "preview", "pages", "rating", "lang"]) {
+          if (!g[k] && byTitle[k]) g[k] = byTitle[k];
+        }
+      }
+    }
+    if (g.summary || g.author) return { ...g, source: "Google Books" };
+  }
   if (g && g.error) errors.push(g.error);
   const o = await fetchFromOpenLibrary(isbn);
   if (o && !o.error) return { ...o, source: "Open Library" };
@@ -554,8 +566,11 @@ async function fetchBookInfoByTitle(title, author) {
     if (!res.ok) res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&langRestrict=fr&maxResults=5&country=US${auth}`, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return { error: `API Google Books inaccessible (code ${res.status})` };
     const data = await res.json();
-    const item = data.items && data.items[0] && data.items[0].volumeInfo;
-    if (!item || !item.title) return { error: "titre introuvable" };
+    const items = (data.items || []).map(i => i.volumeInfo).filter(v => v && v.title);
+    if (!items.length) return { error: "titre introuvable" };
+    // Priorité aux éditions en français, puis à la fiche la plus renseignée
+    const score = v => (v.language === "fr" ? 100 : 0) + (v.description ? 10 : 0) + (v.publisher ? 5 : 0) + (v.imageLinks ? 5 : 0);
+    const item = items.sort((a, b) => score(b) - score(a))[0];
     return {
       title: item.title,
       author: (item.authors || []).join(", "),
