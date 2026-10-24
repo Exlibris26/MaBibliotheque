@@ -95,6 +95,9 @@
         <option value="added">Récemment ajoutés</option>
         <option value="title">Titre A→Z</option>
         <option value="author">Auteur A→Z</option>
+        <option value="author_desc">Auteur Z→A</option>
+        <option value="publisher">Éditeur A→Z</option>
+        <option value="publisher_desc">Éditeur Z→A</option>
         <option value="category">Catégorie</option>
       </select>
       <select id="fCategory"></select>
@@ -182,7 +185,10 @@ function render() {
     (!cat || (b.category || "") === cat)
   );
   if (sort === "title") list.sort((a, b) => a.title.localeCompare(b.title, "fr"));
-  else if (sort === "author") list.sort((a, b) => (a.author || "").localeCompare(b.author || "", "fr"));
+  else if (sort === "author") list.sort((a, b) => (a.author || "zzz").localeCompare(b.author || "zzz", "fr") || a.title.localeCompare(b.title, "fr"));
+  else if (sort === "author_desc") list.sort((a, b) => (b.author || "zzz").localeCompare(a.author || "zzz", "fr") || b.title.localeCompare(a.title, "fr"));
+  else if (sort === "publisher") list.sort((a, b) => (a.publisher || "zzz").localeCompare(b.publisher || "zzz", "fr") || a.title.localeCompare(b.title, "fr"));
+  else if (sort === "publisher_desc") list.sort((a, b) => (b.publisher || "zzz").localeCompare(a.publisher || "zzz", "fr") || b.title.localeCompare(a.title, "fr"));
   else if (sort === "category") list.sort((a, b) => (a.category || "zzz").localeCompare(b.category || "zzz", "fr") || a.title.localeCompare(b.title, "fr"));
   else list.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
 
