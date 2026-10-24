@@ -281,6 +281,7 @@ function openFiche(book) {
       </div>
       ${book.notes ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);line-height:1.65;white-space:pre-wrap">${esc(book.notes)}</div>` : ""}
       <div class="row" style="margin-top:16px">
+        ${(!book.notes || !book.cover || !book.publisher || !book.pages) ? `<button class="btn secondary" id="fFetch">🌐 Compléter depuis le web</button>` : ""}
         <button class="btn secondary" id="fClose">Fermer</button>
         <button class="btn" id="fEdit">✏️ Modifier</button>
       </div>
@@ -289,6 +290,31 @@ function openFiche(book) {
   $("#fClose").onclick = closeModal;
   $("#modalBg").onclick = (e) => { if (e.target === $("#modalBg")) closeModal(); };
   $("#fEdit").onclick = () => { closeModal(); openModal(book); };
+  const fBtn = $("#fFetch");
+  if (fBtn) fBtn.onclick = async () => {
+    fBtn.disabled = true;
+    fBtn.textContent = "🔎 Recherche en cours…";
+    let data = null;
+    if (book.isbn) data = await fetchBookInfo(book.isbn);
+    if (!data || data.error) data = await fetchBookInfoByTitle(book.title, book.author);
+    if (data && !data.error) {
+      if (!book.notes && data.summary) book.notes = data.summary;
+      if (!book.author && data.author) book.author = data.author;
+      if (!book.year && data.year) book.year = data.year;
+      if (!book.publisher && data.publisher) book.publisher = data.publisher;
+      if (!book.pages && data.pages) book.pages = data.pages;
+      if (!book.cover && data.cover) book.cover = data.cover;
+      if (!book.preview && data.preview) book.preview = data.preview;
+      if (!book.rating && data.rating) book.rating = data.rating;
+      if (!book.category && data.subjects && data.subjects.length) book.category = data.subjects[0];
+      save(); render();
+      toast("Fiche complétée ✅");
+      openFiche(book); // réaffiche la fiche enrichie
+    } else {
+      fBtn.disabled = false;
+      fBtn.textContent = "❌ " + ((data && data.error) || "introuvable") + " — saisie manuelle ?";
+    }
+  };
 }
 
 // ---------- Modale d'édition ----------
