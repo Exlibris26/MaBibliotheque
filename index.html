@@ -280,6 +280,8 @@ function openFiche(book) {
         </div>
       </div>
       ${book.notes ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);line-height:1.65;white-space:pre-wrap">${esc(book.notes)}</div>` : ""}
+      ${book.opinion ? `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)"><strong>Mon avis</strong><div style="margin-top:6px;line-height:1.65;white-space:pre-wrap">${esc(book.opinion)}</div></div>` : ""}
+      ${book.remarks ? `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)"><strong>Remarques</strong><ul style="margin:8px 0 0;padding-left:20px;line-height:1.6">${book.remarks.split("\n").map(l => l.trim()).filter(Boolean).map(l => `<li>${esc(l.replace(/^[-•*]\s*/, ""))}</li>`).join("")}</ul></div>` : ""}
       <div class="row" style="margin-top:16px">
         ${(!book.notes || !book.cover || !book.publisher || !book.pages) ? `<button class="btn secondary" id="fFetch">🌐 Compléter depuis le web</button>` : ""}
         <button class="btn secondary" id="fClose">Fermer</button>
@@ -353,6 +355,8 @@ function openModal(book) {
         <div><label>Éditeur</label><input id="mPub" value="${esc(book.publisher || "")}" placeholder="Ex. Gallimard" /></div>
         <div><label>Pages</label><input id="mPages" value="${esc(book.pages || "")}" inputmode="numeric" /></div>
         <div class="full"><label>Notes / résumé</label><textarea id="mNotes" placeholder="Résumé, avis… (ou cliquez sur 🌐 pour l'importer)">${esc(book.notes)}</textarea></div>
+        <div class="full"><label>Mon avis</label><textarea id="mOpinion" placeholder="Votre impression personnelle sur ce livre…">${esc(book.opinion || "")}</textarea></div>
+        <div class="full"><label>Remarques (une par ligne)</label><textarea id="mRemarks" placeholder="Ex. Passage marquant au chapitre 3&#10;Vérifier la suite&#10;Offert par…">${esc(book.remarks || "")}</textarea></div>
         ${book.cover || book.preview ? `<div class="full" style="display:flex;gap:12px;align-items:center">
           ${book.cover ? `<img src="${esc(book.cover)}" alt="Couverture" style="height:90px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.2)" onerror="this.style.display='none'" />` : ""}
           <div>
@@ -409,7 +413,8 @@ function openModal(book) {
         isbn: $("#mIsbn").value.trim(), status: $("#mStatus").value,
         category: $("#mCategory").value.trim(),
         loanedTo: $("#mLoan").value.trim(), notes: $("#mNotes").value.trim(),
-        publisher: $("#mPub").value.trim(), pages: $("#mPages").value.trim()
+        publisher: $("#mPub").value.trim(), pages: $("#mPages").value.trim(),
+        opinion: $("#mOpinion").value.trim(), remarks: $("#mRemarks").value.trim()
       });
       if (isNew) books.push(book);
       save(); closeModal(); render();
@@ -443,7 +448,7 @@ $("#importFile").addEventListener("change", async (e) => {
     for (const b of data) {
       if (!b || !b.title) continue;
       if (ids.has(b.id || b.isbn || b.title)) continue;
-      books.push({ id: b.id || uid(), title: b.title, author: b.author || "", isbn: b.isbn || "", year: b.year || "", status: b.status || "to-read", notes: b.notes || "", category: b.category || "", loanedTo: b.loanedTo || "", publisher: b.publisher || "", pages: b.pages || "", cover: b.cover || "", preview: b.preview || "", rating: b.rating || "", addedAt: b.addedAt || Date.now() });
+      books.push({ id: b.id || uid(), title: b.title, author: b.author || "", isbn: b.isbn || "", year: b.year || "", status: b.status || "to-read", notes: b.notes || "", category: b.category || "", loanedTo: b.loanedTo || "", publisher: b.publisher || "", pages: b.pages || "", cover: b.cover || "", preview: b.preview || "", rating: b.rating || "", opinion: b.opinion || "", remarks: b.remarks || "", addedAt: b.addedAt || Date.now() });
       added++;
     }
     save(); render();
