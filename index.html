@@ -75,7 +75,9 @@
       <button class="btn" id="btnAdd">+ Ajouter</button>
       <button class="btn secondary" id="btnExport">⬇ Exporter</button>
       <button class="btn secondary" id="btnImport">⬆ Importer</button>
+      <button class="btn secondary" id="btnImportCsv">⬆ CSV (Babelio…)</button>
       <input type="file" id="importFile" accept=".json" hidden />
+      <input type="file" id="importCsvFile" accept=".csv,.txt" hidden />
     </div>
     <div class="filters">
       <select id="fStatus">
@@ -454,6 +456,78 @@ $("#importFile").addEventListener("change", async (e) => {
     save(); render();
     toast(`Import : ${added} livre(s) ajouté(s)`);
   } catch { toast("Fichier JSON invalide"); }
+  e.target.value = "";
+});
+
+// ---------- Import CSV (Babelio, Goodreads, Excel…) ----------
+// Les colonnes sont reconnues automatiquement, quel que soit leur libellé
+// ou leur ordre, pour accepter la plupart des exports de bibliothèques.
+const normTxt = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+function parseCsvLine(line, sep) {
+  const cells = []; let cur = "", q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) { if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (ch === '"') { q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === sep) { cells.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  cells.push(cur);
+  return cells.map(c => c.trim());
+}
+$("#btnImportCsv").addEventListener("click", () => $("#importCsvFile").click());
+$("#importCsvFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) throw new Error("vide");
+    const head = lines[0];
+    const sep = [";", "\t", ","].map(s => ({ s, n: head.split(s).length })).sort((a, b) => b.n - a.n)[0].s;
+    const headers = parseCsvLine(head, sep).map(normTxt);
+    const findCol = (keys) => headers.findIndex(h => keys.some(k => h.includes(k)));
+    const col = {
+      title: findCol(["titre", "title", "livre", "oeuvre"]),
+      author: findCol(["auteur", "author"]),
+      isbn: findCol(["isbn", "ean", "codebarre"]),
+      year: findCol(["annee", "year", "publication"]),
+      publisher: findCol(["editeur", "publisher"]),
+      status: findCol(["statut", "status"]),
+      category: findCol(["categorie", "category", "genre", "etagere"])
+    };
+    if (col.title < 0 && col.isbn < 0) throw new Error("colonnes");
+    const normStatus = (v) => {
+      const n = normTxt(v);
+      if (n.includes("cours") || n.includes("lecture") || n.includes("reading")) return "reading";
+      if (n === "lu" || n === "read" || n.includes("termine") || n.includes("fini")) return "read";
+      return "to-read";
+    };
+    const cell = (r, i) => (i >= 0 && r[i] !== undefined ? r[i] : "");
+    const seen = new Set(books.map(b => (b.isbn || b.title + "|" + b.author).toLowerCase()));
+    let added = 0, skipped = 0;
+    for (const line of lines.slice(1)) {
+      const r = parseCsvLine(line, sep);
+      const title = cell(r, col.title), isbn = cell(r, col.isbn).replace(/[^\dXx]/g, "");
+      if (!title && !isbn) continue;
+      const key = (isbn || title + "|" + cell(r, col.author)).toLowerCase();
+      if (seen.has(key)) { skipped++; continue; }
+      seen.add(key);
+      books.push({
+        id: uid(), title: title || isbn, author: cell(r, col.author),
+        isbn, year: (cell(r, col.year).match(/\d{4}/) || [""])[0],
+        status: normStatus(cell(r, col.status)), category: cell(r, col.category),
+        publisher: cell(r, col.publisher),
+        notes: "", opinion: "", remarks: "", loanedTo: "", pages: "", cover: "", preview: "", rating: "",
+        addedAt: Date.now()
+      });
+      added++;
+    }
+    save(); render();
+    toast(`Import CSV : ${added} ajouté(s)${skipped ? ", " + skipped + " doublon(s) ignoré(s)" : ""}. Astuce : ouvrez la fiche puis 🌐 pour compléter depuis le web.`);
+  } catch (err) {
+    toast("❌ CSV non reconnu (" + (err && err.message === "colonnes" ? "aucune colonne titre ou ISBN trouvée" : "fichier vide ou illisible") + ")");
+  }
   e.target.value = "";
 });
 
