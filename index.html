@@ -610,6 +610,43 @@ async function fetchBookInfo(isbn) {
 // Recherche par titre (+ auteur) : secours quand l'ISBN est inconnu,
 // fréquent pour les éditeurs français qui ne transmettent pas leurs
 // métadonnées ISBN à Google Books.
+// Recherche par titre sur Open Library : dernier recours quand Google Books
+// ne référence pas le livre (fréquent pour certains éditeurs français).
+async function fetchFromOpenLibraryByTitle(title, author) {
+  try {
+    const p = new URLSearchParams({ title, limit: "5" });
+    if (author) p.set("author", author);
+    const res = await fetch(`https://openlibrary.org/search.json?${p}`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (!d.numFound) return null;
+    const doc = (d.docs || []).find(x => x.title && x.title.toLowerCase() === title.toLowerCase()) || d.docs[0];
+    if (!doc || !doc.title) return null;
+    // Le résumé se trouve sur la fiche de l'œuvre
+    let summary = "";
+    try {
+      const w = await fetch(`https://openlibrary.org${doc.key}.json`, { signal: AbortSignal.timeout(8000) });
+      if (w.ok) {
+        const wd = await w.json();
+        summary = typeof wd.description === "string" ? wd.description : (wd.description && wd.description.value) || "";
+      }
+    } catch (e) { /* résumé absent : pas grave */ }
+    return {
+      title: doc.title,
+      author: (doc.author_name || []).join(", "),
+      year: doc.first_publish_year ? String(doc.first_publish_year) : "",
+      summary: String(summary).replace(/<[^>]+>/g, "").replace(/\{\{[^}]*\}\}/g, "").trim(),
+      subjects: (doc.subject || []).slice(0, 5),
+      publisher: (doc.publisher || [])[0] || "",
+      pages: "",
+      lang: (doc.language || [])[0] || "",
+      cover: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : "",
+      preview: "",
+      source: "Open Library (par titre)"
+    };
+  } catch (e) { return null; }
+}
+
 async function fetchBookInfoByTitle(title, author) {
   try {
     const key = getApiKey();
@@ -641,6 +678,11 @@ async function fetchBookInfoByTitle(title, author) {
     if (!data) data = await gb(q, "");
     // 3) recherche libre : titre + auteur comme simples mots-clés
     if (!data) data = await gb(author ? `${title} ${author}` : title, "");
+    // 4) dernier recours : Open Library par titre
+    if (!data) {
+      const ol = await fetchFromOpenLibraryByTitle(title, author);
+      if (ol) return ol;
+    }
     if (!data) return { error: "titre introuvable" };
     const item = pickBest(data);
     if (!item) return { error: "titre introuvable" };
