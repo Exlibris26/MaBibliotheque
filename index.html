@@ -516,17 +516,29 @@ async function fetchFromGoogleBooks(isbn) {
   try {
     const key = getApiKey();
     const auth = key ? `&key=${encodeURIComponent(key)}` : "";
-    const gbCall = () => fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&country=FR${auth}`, { signal: AbortSignal.timeout(8000) })
-      .then(r => r.ok ? r : fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&country=US${auth}`, { signal: AbortSignal.timeout(8000) }));
-    // Les erreurs passagères de Google (429 quota/minute, 503 indisponible) se
-    // résorbent souvent en quelques secondes : on réessaie une fois après une pause.
-    let res = await gbCall();
-    if ((res.status === 429 || res.status === 503) ) {
-      await new Promise(r => setTimeout(r, 4000));
-      res = await gbCall();
+    // Le paramètre « country » filtre parfois des livres français : on essaie
+    // toujours les deux variantes (FR puis US), même si la première répond vide.
+    // Les erreurs passagères (429 quota/minute, 503 indisponible) se résorbent
+    // souvent en quelques secondes : on réessaie une fois après une pause.
+    let data = null, status = 0, sawOk = false;
+    for (let attempt = 0; attempt < 2 && !data; attempt++) {
+      if (attempt) await new Promise(r => setTimeout(r, 4000));
+      for (const c of ["FR", "US"]) {
+        try {
+          const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&country=${c}${auth}`, { signal: AbortSignal.timeout(8000) });
+          status = res.status;
+          if (res.ok) {
+            sawOk = true;
+            const d = await res.json();
+            if (d.totalItems) { data = d; break; }
+          }
+        } catch (e) { /* on tente la variante suivante */ }
+      }
     }
-    if (!res.ok) return { error: `API Google Books inaccessible (code ${res.status}${res.status === 429 && !key ? " — quota public épuisé, ajoutez une clé API gratuite" : res.status === 503 ? " — Google indisponible, réessayez dans un instant" : ""})` };
-    const data = await res.json();
+    if (!data) {
+      if (sawOk) return { error: "ISBN inconnu de Google Books" };
+      return { error: `API Google Books inaccessible (code ${status}${status === 429 && !key ? " — quota public épuisé, ajoutez une clé API gratuite" : status === 503 ? " — Google indisponible, réessayez dans un instant" : ""})` };
+    }
     const item = data.items && data.items[0] && data.items[0].volumeInfo;
     if (!item || !item.title) return { error: "ISBN inconnu de Google Books" };
     return {
@@ -602,8 +614,20 @@ async function fetchBookInfoByTitle(title, author) {
   try {
     const key = getApiKey();
     const auth = key ? `&key=${encodeURIComponent(key)}` : "";
-    const gb = (q, extra) => fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=10&country=FR${extra || ""}${auth}`, { signal: AbortSignal.timeout(8000) })
-      .then(r => r.ok ? r : fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=10&country=US${extra || ""}${auth}`, { signal: AbortSignal.timeout(8000) }));
+    const gb = async (q, extra) => {
+      // FR puis US systématiquement : le paramètre « country » filtre parfois
+      // des livres français, y compris quand il répond « aucun résultat ».
+      for (const c of ["FR", "US"]) {
+        try {
+          const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=10&country=${c}${extra || ""}${auth}`, { signal: AbortSignal.timeout(8000) });
+          if (res.ok) {
+            const d = await res.json();
+            if (d.totalItems) return d;
+          }
+        } catch (e) { /* variante suivante */ }
+      }
+      return null;
+    };
     const pickBest = (data) => {
       const items = (data.items || []).map(i => i.volumeInfo).filter(v => v && v.title);
       if (!items.length) return null;
@@ -612,21 +636,13 @@ async function fetchBookInfoByTitle(title, author) {
     };
     // 1) recherche stricte : titre exact entre guillemets, éventuellement avec l'auteur
     let q = author ? `intitle:"${title}" inauthor:"${author}"` : `intitle:"${title}"`;
-    let res = await gb(q, "&langRestrict=fr");
-    if (!res.ok) return { error: `API Google Books inaccessible (code ${res.status})` };
-    let item = pickBest(await res.json());
+    let data = await gb(q, "&langRestrict=fr");
     // 2) recherche stricte sans contrainte de langue
-    if (!item) {
-      res = await gb(q, "");
-      if (!res.ok) return { error: `API Google Books inaccessible (code ${res.status})` };
-      item = pickBest(await res.json());
-    }
+    if (!data) data = await gb(q, "");
     // 3) recherche libre : titre + auteur comme simples mots-clés
-    if (!item) {
-      res = await gb(author ? `${title} ${author}` : title, "");
-      if (!res.ok) return { error: `API Google Books inaccessible (code ${res.status})` };
-      item = pickBest(await res.json());
-    }
+    if (!data) data = await gb(author ? `${title} ${author}` : title, "");
+    if (!data) return { error: "titre introuvable" };
+    const item = pickBest(data);
     if (!item) return { error: "titre introuvable" };
     return {
       title: item.title,
