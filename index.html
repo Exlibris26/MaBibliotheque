@@ -184,9 +184,18 @@ function render() {
     (!ln || b.loanedTo) &&
     (!cat || (b.category || "") === cat)
   );
+  // Clé de tri par nom de famille : « Martin, Jacques » → « Martin »,
+  // « Jacques Martin » → « Martin ». Le tri bibliothécaire se fait sur le nom.
+  const lastName = (a) => {
+    const s = String(a || "").trim();
+    if (!s) return "zzz";
+    if (s.includes(",")) return s.split(",")[0].trim().toLowerCase();
+    const parts = s.split(/\s+/);
+    return parts[parts.length - 1].toLowerCase();
+  };
   if (sort === "title") list.sort((a, b) => a.title.localeCompare(b.title, "fr"));
-  else if (sort === "author") list.sort((a, b) => (a.author || "zzz").localeCompare(b.author || "zzz", "fr") || a.title.localeCompare(b.title, "fr"));
-  else if (sort === "author_desc") list.sort((a, b) => (b.author || "zzz").localeCompare(a.author || "zzz", "fr") || b.title.localeCompare(a.title, "fr"));
+  else if (sort === "author") list.sort((a, b) => lastName(a.author).localeCompare(lastName(b.author), "fr") || a.title.localeCompare(b.title, "fr"));
+  else if (sort === "author_desc") list.sort((a, b) => lastName(b.author).localeCompare(lastName(a.author), "fr") || b.title.localeCompare(a.title, "fr"));
   else if (sort === "publisher") list.sort((a, b) => (a.publisher || "zzz").localeCompare(b.publisher || "zzz", "fr") || a.title.localeCompare(b.title, "fr"));
   else if (sort === "publisher_desc") list.sort((a, b) => (b.publisher || "zzz").localeCompare(a.publisher || "zzz", "fr") || b.title.localeCompare(a.title, "fr"));
   else if (sort === "category") list.sort((a, b) => (a.category || "zzz").localeCompare(b.category || "zzz", "fr") || a.title.localeCompare(b.title, "fr"));
