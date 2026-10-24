@@ -76,6 +76,7 @@
       <button class="btn secondary" id="btnExport">⬇ Exporter</button>
       <button class="btn secondary" id="btnImport">⬆ Importer</button>
       <button class="btn secondary" id="btnImportCsv">⬆ CSV (Babelio…)</button>
+      <button class="btn secondary" id="btnCompleteAll">🌐 Compléter tout</button>
       <input type="file" id="importFile" accept=".json" hidden />
       <input type="file" id="importCsvFile" accept=".csv,.txt" hidden />
     </div>
@@ -807,6 +808,50 @@ async function fetchBookInfoByTitle(title, author) {
     };
   } catch (e) { return { error: "réseau bloqué ou hors ligne (Google Books)" }; }
 }
+
+// ---------- Complétion en masse ----------
+// Parcourt les fiches incomplètes (pas de couverture, résumé ou éditeur) et
+// les enrichit automatiquement. Le rythme est posé pour respecter le quota
+// de Google Books (environ 1 livre par seconde et demie).
+let bulkRunning = false;
+$("#btnCompleteAll").addEventListener("click", async () => {
+  if (bulkRunning) return;
+  const todo = books.filter(b => !b.cover || !b.notes || !b.publisher);
+  if (!todo.length) { toast("Toutes les fiches sont déjà complètes ✨"); return; }
+  if (!confirm(`Compléter ${todo.length} fiche(s) depuis le web ? Cela peut prendre environ ${Math.ceil(todo.length * 1.5 / 60)} minute(s).`)) return;
+  bulkRunning = true;
+  const btn = $("#btnCompleteAll");
+  btn.disabled = true;
+  let done = 0, ok = 0;
+  for (const book of todo) {
+    btn.textContent = `🔎 ${done + 1}/${todo.length}…`;
+    let data = null;
+    try {
+      if (book.isbn) data = await fetchBookInfo(book.isbn);
+      if (!data || data.error) data = await fetchBookInfoByTitle(book.title, book.author);
+      if (data && !data.error) {
+        if (!book.notes && data.summary) book.notes = data.summary;
+        if (!book.author && data.author) book.author = data.author;
+        if (!book.year && data.year) book.year = data.year;
+        if (!book.publisher && data.publisher) book.publisher = data.publisher;
+        if (!book.pages && data.pages) book.pages = data.pages;
+        if (!book.cover && data.cover) book.cover = data.cover;
+        if (!book.preview && data.preview) book.preview = data.preview;
+        if (!book.rating && data.rating) book.rating = data.rating;
+        if (!book.category && data.subjects && data.subjects.length) book.category = data.subjects[0];
+        ok++;
+      }
+    } catch (e) { /* livre suivant */ }
+    done++;
+    save(); render();
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  bulkRunning = false;
+  btn.disabled = false;
+  btn.textContent = "🌐 Compléter tout";
+  toast(`Complétion terminée : ${ok}/${todo.length} fiche(s) enrichie(s) ✨`);
+});
+
 
 // ---------- Traitement d'un code scanné / saisi ----------
 async function handleScannedCode(code) {
