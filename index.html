@@ -375,6 +375,14 @@ function openModal(book) {
         <div class="full"><label>Notes / résumé</label><textarea id="mNotes" placeholder="Résumé, avis… (ou cliquez sur 🌐 pour l'importer)">${esc(book.notes)}</textarea></div>
         <div class="full"><label>Mon avis</label><textarea id="mOpinion" placeholder="Votre impression personnelle sur ce livre…">${esc(book.opinion || "")}</textarea></div>
         <div class="full"><label>Remarques (une par ligne)</label><textarea id="mRemarks" placeholder="Ex. Passage marquant au chapitre 3&#10;Vérifier la suite&#10;Offert par…">${esc(book.remarks || "")}</textarea></div>
+        <div class="full"><label>Couverture (URL ou fichier local)</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input class="field" id="mCoverUrl" style="flex:1;min-width:180px" value="${esc(book.cover || "")}" placeholder="https://…/couverture.jpg" />
+            <button type="button" class="btn secondary" id="mCoverBtn">📁 Fichier…</button>
+            <input type="file" id="mCoverFile" accept="image/*" hidden />
+            ${book.cover ? `<img src="${esc(book.cover)}" alt="" style="height:56px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.2)" onerror="this.style.display='none'" />` : ""}
+          </div>
+        </div>
         ${book.cover || book.preview ? `<div class="full" style="display:flex;gap:12px;align-items:center">
           ${book.cover ? `<img src="${esc(book.cover)}" alt="Couverture" style="height:90px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.2)" onerror="this.style.display='none'" />` : ""}
           <div>
@@ -405,6 +413,26 @@ function openModal(book) {
     book.rating = data.rating || book.rating || "";
     msg.textContent = `✅ Fiche trouvée (${data.source}) et complétée (champs vides uniquement).`;
   };
+  $("#mCoverBtn").onclick = () => $("#mCoverFile").click();
+  $("#mCoverFile").addEventListener("change", async () => {
+    const file = $("#mCoverFile").files[0];
+    if (!file) return;
+    try {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      await img.decode();
+      // Réduction : 300 px de large, JPEG compressé — la couverture tient
+      // confortablement dans la base locale et reste nette sur cartes et fiches.
+      const cnv = document.createElement("canvas");
+      cnv.width = 300;
+      cnv.height = Math.round(img.naturalHeight * 300 / img.naturalWidth);
+      cnv.getContext("2d").drawImage(img, 0, 0, cnv.width, cnv.height);
+      URL.revokeObjectURL(img.src);
+      $("#mCoverUrl").value = cnv.toDataURL("image/jpeg", 0.85);
+      toast("Couverture importée ✅ — pensez à « Enregistrer »");
+    } catch (e) { toast("❌ Image illisible"); }
+    $("#mCoverFile").value = "";
+  });
   $("#mFetch").onclick = async () => {
     const isbn = $("#mIsbn").value.replace(/\D/g, "");
     const msg = $("#mFetchMsg");
@@ -432,7 +460,8 @@ function openModal(book) {
         category: $("#mCategory").value.trim(),
         loanedTo: $("#mLoan").value.trim(), notes: $("#mNotes").value.trim(),
         publisher: $("#mPub").value.trim(), pages: $("#mPages").value.trim(),
-        opinion: $("#mOpinion").value.trim(), remarks: $("#mRemarks").value.trim()
+        opinion: $("#mOpinion").value.trim(), remarks: $("#mRemarks").value.trim(),
+        cover: $("#mCoverUrl").value.trim()
       });
       if (isNew) books.push(book);
       save(); closeModal(); render();
