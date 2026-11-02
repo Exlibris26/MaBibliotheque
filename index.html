@@ -56,6 +56,18 @@
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }
   .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
   .filters select, .filters input { padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+  .fiche-head { display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap; }
+  .fiche-cover { width:150px; min-width:120px; border-radius:6px; }
+  .fiche-body { flex:1; min-width:240px; overflow-wrap:break-word; }
+  .fiche-actions { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; margin-top:16px; }
+  @media (max-width: 560px) {
+    .fiche-head { display:block; text-align:center; }
+    .fiche-head img.fiche-cover { width:130px !important; min-width:0; margin:0 auto 12px; }
+    .fiche-body { min-width:0; text-align:left; }
+    .fiche-body > div { overflow-wrap:break-word; }
+    .fiche-actions { flex-direction:column; }
+    .fiche-actions .btn { width:100%; }
+  }
   @media (max-width: 560px) {
     html { font-size: 17px; -webkit-text-size-adjust: 100%; }
     body { line-height: 1.5; }
@@ -314,11 +326,11 @@ function openFiche(book) {
   $("#modalRoot").innerHTML = `
   <div class="modal-bg" id="modalBg">
     <div class="modal" style="max-width:680px">
-      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+      <div class="fiche-head">
         ${book.cover
-          ? `<img src="${esc(book.cover)}" alt="Couverture" style="width:150px;min-width:120px;box-shadow:0 4px 12px rgba(0,0,0,.25);border-radius:6px" onerror="this.style.display='none'" />`
-          : `<div style="width:150px;min-width:120px;height:220px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:3rem;border-radius:6px;border:1px solid var(--border)">📖</div>`}
-        <div style="flex:1;min-width:240px">
+          ? `<img src="${esc(book.cover)}" alt="Couverture" class="fiche-cover" style="box-shadow:0 4px 12px rgba(0,0,0,.25)" onerror="this.style.display='none'" />`
+          : `<div class="fiche-cover" style="height:220px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:3rem;border:1px solid var(--border)">📖</div>`}
+        <div class="fiche-body">
           <h2 style="margin:0 0 4px">${esc(book.title)}</h2>
           <div style="font-size:1.05rem;color:#6b5d4f;margin-bottom:10px">✍️ ${esc(book.author || "Auteur inconnu")}</div>
           ${stars ? `<div style="margin-bottom:10px">${stars}</div>` : ""}
@@ -337,7 +349,7 @@ function openFiche(book) {
       ${book.notes ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);line-height:1.65;white-space:pre-wrap">${esc(book.notes)}</div>` : ""}
       ${book.opinion ? `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)"><strong>Mon avis</strong><div style="margin-top:6px;line-height:1.65;white-space:pre-wrap">${esc(book.opinion)}</div></div>` : ""}
       ${book.remarks ? `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)"><strong>Remarques</strong><ul style="margin:8px 0 0;padding-left:20px;line-height:1.6">${book.remarks.split("\n").map(l => l.trim()).filter(Boolean).map(l => `<li>${esc(l.replace(/^[-•*]\s*/, ""))}</li>`).join("")}</ul></div>` : ""}
-      <div class="row" style="margin-top:16px">
+      <div class="fiche-actions">
         ${(!book.notes || !book.cover || !book.publisher || !book.pages) ? `<button class="btn secondary" id="fFetch">🌐 Compléter depuis le web</button>` : ""}
         <button class="btn secondary" id="fClose">Fermer</button>
         <button class="btn" id="fEdit">✏️ Modifier</button>
