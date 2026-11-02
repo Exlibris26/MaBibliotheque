@@ -1,0 +1,978 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bibli-o-thèque</title>
+<style>
+  :root {
+    --bg: #f6f4ef; --card: #ffffff; --ink: #2b2620; --muted: #8a8175;
+    --accent: #b45309; --accent2: #92400e; --ok: #15803d; --danger: #b91c1c;
+    --border: #e5dfd5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  header { background: linear-gradient(135deg, #7c2d12, #b45309); color: #fff; padding: 16px 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+  header h1 { font-size: 1.25rem; margin: 0; flex: 1; }
+  header .stats { font-size: .8rem; opacity: .9; }
+  .tabs { display: flex; gap: 8px; }
+  .tab { background: rgba(255,255,255,.15); border: none; color: #fff; padding: 8px 14px; border-radius: 999px; cursor: pointer; font-size: .85rem; }
+  .tab.active { background: #fff; color: var(--accent2); font-weight: 600; }
+  main { max-width: 900px; margin: 0 auto; padding: 16px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  input, select, textarea, button { font: inherit; }
+  .btn { background: var(--accent); color: #fff; border: none; border-radius: 10px; padding: 10px 16px; cursor: pointer; font-weight: 600; }
+  .btn.secondary { background: #fff; color: var(--ink); border: 1px solid var(--border); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .field { flex: 1; min-width: 180px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .book { display: flex; gap: 12px; align-items: flex-start; }
+  .book .cover { width: 44px; height: 62px; border-radius: 6px; background: linear-gradient(160deg,#d6b25a,#8a5a2b); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
+  .book .meta { flex: 1; min-width: 0; }
+  .book h3 { margin: 0 0 2px; font-size: 1rem; }
+  .book .sub { color: var(--muted); font-size: .82rem; margin-bottom: 6px; }
+  .badge { display: inline-block; font-size: .7rem; padding: 2px 8px; border-radius: 999px; background: #fef3c7; color: #92400e; margin-right: 4px; }
+  .badge.read { background: #dcfce7; color: var(--ok); }
+  .badge.loaned { background: #fee2e2; color: var(--danger); }
+  .book .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .icon-btn { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: .78rem; }
+  .icon-btn:hover { border-color: var(--accent); }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+  .modal { background: #fff; border-radius: 16px; padding: 20px; width: 100%; max-width: 480px; max-height: 90vh; overflow: auto; }
+  .modal h2 { margin-top: 0; font-size: 1.1rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid .full { grid-column: 1 / -1; }
+  label { font-size: .78rem; color: var(--muted); display: block; margin-bottom: 3px; }
+  .modal input, .modal select, .modal textarea { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; }
+  .modal textarea { resize: vertical; min-height: 60px; }
+  .modal .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+  #scanWrap { background: #000; border-radius: 14px; overflow: hidden; position: relative; }
+  #video { width: 100%; display: block; }
+  #scanOverlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  #scanOverlay::before { content: ""; width: 70%; height: 40%; border: 3px solid rgba(255,255,255,.9); border-radius: 12px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); }
+  .hint { font-size: .8rem; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: .85rem; z-index: 100; animation: fade 3s forwards; }
+  @keyframes fade { 0%,80% {opacity:1} 100% {opacity:0} }
+  .empty { text-align: center; color: var(--muted); padding: 40px 0; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .filters select, .filters input { padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } header { padding: 12px; } header h1 { flex-basis: 100%; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>📚 Bibli-o-thèque</h1>
+  <span class="stats" id="stats"></span>
+  <nav class="tabs">
+    <button class="tab active" data-tab="list">Mes livres</button>
+    <button class="tab" data-tab="scan">Scanner</button>
+  </nav>
+</header>
+<main>
+  <section id="view-list">
+    <div class="toolbar">
+      <input class="field" id="search" placeholder="🔍 Rechercher titre, auteur, ISBN…" />
+      <button class="btn" id="btnAdd">+ Ajouter</button>
+      <button class="btn secondary" id="btnExport">⬇ Exporter</button>
+      <button class="btn secondary" id="btnImportFusion" title="Ajoute les livres du fichier sans toucher à la bibliothèque existante">⬆ Importer JSON — Fusionner</button>
+      <button class="btn secondary" id="btnImportRemplace" title="Remplace toute la bibliothèque par le fichier">⬆ Importer JSON — Remplacer</button>
+      <button class="btn secondary" id="btnImportCsv">⬆ CSV (Babelio…)</button>
+      <button class="btn secondary" id="btnCompleteAll">🌐 Compléter tout</button>
+      <input type="file" id="importFile" accept=".json" hidden />
+      <input type="file" id="importCsvFile" accept=".csv,.txt" hidden />
+    </div>
+    <div class="filters">
+      <select id="fStatus">
+        <option value="">Tous les statuts</option>
+        <option value="to-read">À lire</option>
+        <option value="reading">En lecture</option>
+        <option value="read">Lu</option>
+      </select>
+      <select id="fLoaned">
+        <option value="">Tous (prêts inclus)</option>
+        <option value="loaned">Prêtés uniquement</option>
+      </select>
+      <select id="fSort">
+        <option value="added">Récemment ajoutés</option>
+        <option value="title">Titre A→Z</option>
+        <option value="author">Auteur A→Z</option>
+        <option value="author_desc">Auteur Z→A</option>
+        <option value="publisher">Éditeur A→Z</option>
+        <option value="publisher_desc">Éditeur Z→A</option>
+        <option value="category">Catégorie</option>
+      </select>
+      <select id="fCategory"></select>
+      <select id="fLieu">
+        <option value="">Tous les lieux</option>
+        <option value="__none">Lieu non précisé</option>
+      </select>
+    </div>
+    <div id="bookList"></div>
+  </section>
+
+  <section id="view-scan" hidden>
+    <div class="card">
+      <h2 style="margin:0 0 10px; font-size:1.05rem">📷 Scanner un code-barres (ISBN)</h2>
+      <div id="scanWrap" hidden>
+        <video id="video" playsinline muted></video>
+        <div id="scanOverlay"></div>
+      </div>
+      <div id="scanMsg" class="hint"></div>
+      <div class="toolbar" style="margin-top:12px">
+        <button class="btn" id="btnStartScan">Démarrer la caméra</button>
+        <button class="btn secondary" id="btnStopScan" hidden>Arrêter</button>
+      </div>
+      <div class="hint">
+        <strong>Compatibilité :</strong> la détection utilise l'API native <code>BarcodeDetector</code> (Chrome Android, etc.).
+        Sur iPhone / Safari, la bibliothèque ZXing est chargée automatiquement en repli.
+        <em>Note : ce repli nécessite un accès internet et ne s'active pas dans l'aperçu restreint — il fonctionne dans le fichier téléchargé et hébergé.</em>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0" />
+      <label>Saisie manuelle — ISBN ou code-barres</label>
+      <div class="toolbar" style="margin-bottom:0">
+        <input class="field" id="manualCode" placeholder="Ex. 9782070413119" inputmode="numeric" />
+        <button class="btn" id="btnManual">Ajouter</button>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0" />
+      <label>Clé API Google Books (facultative mais recommandée)</label>
+      <div class="toolbar" style="margin-bottom:0">
+        <input class="field" id="apiKey" placeholder="Collez ici votre clé API si les recherches affichent « code 429 »" />
+        <button class="btn secondary" id="btnSaveKey">Mémoriser</button>
+      </div>
+      <div class="hint" id="keyMsg">Sans clé, Google limite fortement les recherches (erreur « code 429 »). Une clé gratuite (1000 recherches/jour) corrige ce problème durablement. La clé reste enregistrée uniquement dans ce navigateur.</div>
+    </div>
+  </section>
+</main>
+
+<div id="modalRoot"></div>
+
+<!-- Repli iPhone/Safari : bibliothèque ZXing (décodage logiciel des codes-barres).
+     Chargée en différé : si l'accès réseau est bloqué, l'app continue de fonctionner
+     avec l'API native (Android) et la saisie manuelle. -->
+<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js" onerror="window.__zxingFailed = true"></script>
+
+<script>
+"use strict";
+// ---------- Stockage ----------
+const KEY = "bibliotheque_books_v1";
+let books = [];
+try { books = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) { books = []; }
+const save = () => localStorage.setItem(KEY, JSON.stringify(books));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+// ---------- Utilitaires ----------
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(msg) {
+  const t = document.createElement("div");
+  t.className = "toast"; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+const STATUS = { "to-read": "À lire", "reading": "En lecture", "read": "Lu" };
+const LIEUX = ["Chaponost S", "Chaponost P", "Chaponost B", "Cornillon"];
+
+// ---------- Onglets ----------
+document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b === btn));
+  $("#view-list").hidden = btn.dataset.tab !== "list";
+  $("#view-scan").hidden = btn.dataset.tab !== "scan";
+  if (btn.dataset.tab !== "scan") stopScan();
+}));
+
+// ---------- Rendu liste ----------
+function render() {
+  const q = $("#search").value.trim().toLowerCase();
+  const st = $("#fStatus").value, ln = $("#fLoaned").value, sort = $("#fSort").value, cat = $("#fCategory").value, lieu = $("#fLieu").value;
+  let list = books.filter(b =>
+    (!q || [b.title, b.author, b.isbn].join(" ").toLowerCase().includes(q)) &&
+    (!st || b.status === st) &&
+    (!ln || b.loanedTo) &&
+    (!cat || (b.category || "") === cat) &&
+    (!lieu || (lieu === "__none" ? !b.lieu : b.lieu === lieu))
+  );
+  // Clé de tri par nom de famille : « Martin, Jacques » → « Martin »,
+  // « Jacques Martin » → « Martin ». Le tri bibliothécaire se fait sur le nom.
+  const lastName = (a) => {
+    const s = String(a || "").trim();
+    if (!s) return "zzz";
+    if (s.includes(",")) return s.split(",")[0].trim().toLowerCase();
+    const parts = s.split(/\s+/);
+    return parts[parts.length - 1].toLowerCase();
+  };
+  if (sort === "title") list.sort((a, b) => a.title.localeCompare(b.title, "fr"));
+  else if (sort === "author") list.sort((a, b) => lastName(a.author).localeCompare(lastName(b.author), "fr") || a.title.localeCompare(b.title, "fr"));
+  else if (sort === "author_desc") list.sort((a, b) => lastName(b.author).localeCompare(lastName(a.author), "fr") || b.title.localeCompare(a.title, "fr"));
+  else if (sort === "publisher") list.sort((a, b) => (a.publisher || "zzz").localeCompare(b.publisher || "zzz", "fr") || a.title.localeCompare(b.title, "fr"));
+  else if (sort === "publisher_desc") list.sort((a, b) => (b.publisher || "zzz").localeCompare(a.publisher || "zzz", "fr") || b.title.localeCompare(a.title, "fr"));
+  else if (sort === "category") list.sort((a, b) => (a.category || "zzz").localeCompare(b.category || "zzz", "fr") || a.title.localeCompare(b.title, "fr"));
+  else list.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+
+  const read = books.filter(b => b.status === "read").length;
+  const loaned = books.filter(b => b.loanedTo).length;
+  $("#stats").textContent = `${books.length} livre(s) · ${read} lu(s) · ${loaned} prêté(s)`;
+
+  // Filtre par catégorie (reconstruit à chaque rendu)
+  const cats = [...new Set(books.map(b => b.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
+  const fCat = $("#fCategory");
+  const curCat = fCat.value;
+  fCat.innerHTML = `<option value="">Toutes les catégories</option>` +
+    cats.map(c => `<option value="${esc(c)}" ${c === curCat ? "selected" : ""}>${esc(c)}</option>`).join("");
+
+  // Filtre par lieu de stockage (liste fixe)
+  const fLieu = $("#fLieu");
+  const curLieu = fLieu.value;
+  fLieu.innerHTML = `<option value="">Tous les lieux</option>` +
+    LIEUX.map(l => `<option value="${esc(l)}" ${l === curLieu ? "selected" : ""}>${esc(l)}</option>`).join("") +
+    `<option value="__none">Lieu non précisé</option>`;
+
+  const el = $("#bookList");
+  if (!list.length) {
+    el.innerHTML = `<div class="empty">Aucun livre à afficher.<br>Ajoutez-en un, ou scannez un ISBN depuis l'onglet Scanner 📷</div>`;
+    return;
+  }
+  el.innerHTML = list.map(b => `
+    <div class="card book" data-act="view" data-id="${b.id}" style="cursor:pointer" title="Cliquez pour ouvrir la fiche">
+      <div class="cover">${b.cover ? `<img src="${esc(b.cover)}" alt="Couverture" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onerror="this.outerHTML='📖'" />` : "📖"}</div>
+      <div class="meta">
+        <h3>${esc(b.title)}</h3>
+        <div class="sub">${esc(b.author || "Auteur inconnu")}${b.isbn ? " · ISBN " + esc(b.isbn) : ""}${b.year ? " · " + esc(b.year) : ""}${b.publisher ? " · " + esc(b.publisher) : ""}${b.pages ? " · " + esc(b.pages) + " p." : ""}</div>
+        ${b.category ? `<span class="badge" style="background:#e0e7ff;color:#3730a3">${esc(b.category)}</span>` : ""}${b.lieu ? `<span class="badge" style="background:#fef9c3;color:#854d0e">📍 ${esc(b.lieu)}</span>` : ""}
+        <span class="badge ${b.status === "read" ? "read" : ""}">${STATUS[b.status] || b.status}</span>
+        ${b.loanedTo ? `<span class="badge loaned">Prêté à ${esc(b.loanedTo)}</span>` : ""}
+        ${b.notes ? `<div class="sub" style="margin-top:6px">📝 ${esc(b.notes)}</div>` : ""}
+      </div>
+      <div class="actions">
+        <button class="icon-btn" data-act="cycle" data-id="${b.id}">${b.status === "read" ? "↺ À lire" : b.status === "reading" ? "✓ Lu" : "▶ En lecture"}</button>
+        <button class="icon-btn" data-act="loan" data-id="${b.id}">${b.loanedTo ? "↩ Retour" : "📤 Prêter"}</button>
+        <button class="icon-btn" data-act="edit" data-id="${b.id}">✏️</button>
+        <button class="icon-btn" data-act="del" data-id="${b.id}">🗑️</button>
+      </div>
+    </div>`).join("");
+}
+
+$("#bookList").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn) {
+    // Clic sur la carte elle-même (hors boutons) : ouvrir la fiche lisible
+    const card = e.target.closest("[data-act='view']");
+    if (card) { const b = books.find(x => x.id === card.dataset.id); if (b) openFiche(b); }
+    return;
+  }
+  const book = books.find(b => b.id === btn.dataset.id);
+  if (!book) return;
+  const act = btn.dataset.act;
+  if (act === "cycle") {
+    book.status = book.status === "to-read" ? "reading" : book.status === "reading" ? "read" : "to-read";
+    save(); render();
+  } else if (act === "loan") {
+    if (book.loanedTo) { book.loanedTo = ""; toast("Retour enregistré ✅"); }
+    else {
+      const who = prompt("Prêté à qui ?");
+      if (who === null) return;
+      book.loanedTo = who.trim();
+      toast(book.loanedTo ? "Prêt enregistré 📤" : "Prêt annulé");
+    }
+    save(); render();
+  } else if (act === "edit") {
+    openModal(book);
+  } else if (act === "del") {
+    if (confirm(`Supprimer « ${book.title} » ?`)) {
+      books = books.filter(b => b.id !== book.id);
+      save(); render(); toast("Livre supprimé");
+    }
+  }
+});
+
+["#search", "#fStatus", "#fLoaned", "#fSort", "#fLieu"].forEach(s => $(s).addEventListener("input", render));
+
+// ---------- Fiche lisible (vue détaillée) ----------
+function openFiche(book) {
+  const stars = book.rating ? "⭐".repeat(Math.round(book.rating)) + ` <span class="sub">${book.rating}/5</span>` : "";
+  $("#modalRoot").innerHTML = `
+  <div class="modal-bg" id="modalBg">
+    <div class="modal" style="max-width:680px">
+      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+        ${book.cover
+          ? `<img src="${esc(book.cover)}" alt="Couverture" style="width:150px;min-width:120px;box-shadow:0 4px 12px rgba(0,0,0,.25);border-radius:6px" onerror="this.style.display='none'" />`
+          : `<div style="width:150px;min-width:120px;height:220px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:3rem;border-radius:6px;border:1px solid var(--border)">📖</div>`}
+        <div style="flex:1;min-width:240px">
+          <h2 style="margin:0 0 4px">${esc(book.title)}</h2>
+          <div style="font-size:1.05rem;color:#6b5d4f;margin-bottom:10px">✍️ ${esc(book.author || "Auteur inconnu")}</div>
+          ${stars ? `<div style="margin-bottom:10px">${stars}</div>` : ""}
+          <div style="margin-bottom:8px">
+            <span class="badge ${book.status === "read" ? "read" : ""}">${STATUS[book.status] || book.status}</span>
+            ${book.category ? `<span class="badge" style="background:#e0e7ff;color:#3730a3">${esc(book.category)}</span>` : ""}
+            ${book.lieu ? `<span class="badge" style="background:#fef9c3;color:#854d0e">📍 ${esc(book.lieu)}</span>` : ""}
+            ${book.loanedTo ? `<span class="badge loaned">Prêté à ${esc(book.loanedTo)}</span>` : ""}
+          </div>
+          <div class="sub" style="line-height:1.7">
+            ${[book.year, book.publisher, book.pages ? book.pages + " pages" : "", book.isbn ? "ISBN " + book.isbn : ""].filter(Boolean).map(esc).join(" · ")}
+          </div>
+          ${book.preview ? `<div style="margin-top:6px"><a href="${esc(book.preview)}" target="_blank" rel="noopener">🔗 Voir sur Google Books</a></div>` : ""}
+        </div>
+      </div>
+      ${book.notes ? `<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);line-height:1.65;white-space:pre-wrap">${esc(book.notes)}</div>` : ""}
+      ${book.opinion ? `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)"><strong>Mon avis</strong><div style="margin-top:6px;line-height:1.65;white-space:pre-wrap">${esc(book.opinion)}</div></div>` : ""}
+      ${book.remarks ? `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)"><strong>Remarques</strong><ul style="margin:8px 0 0;padding-left:20px;line-height:1.6">${book.remarks.split("\n").map(l => l.trim()).filter(Boolean).map(l => `<li>${esc(l.replace(/^[-•*]\s*/, ""))}</li>`).join("")}</ul></div>` : ""}
+      <div class="row" style="margin-top:16px">
+        ${(!book.notes || !book.cover || !book.publisher || !book.pages) ? `<button class="btn secondary" id="fFetch">🌐 Compléter depuis le web</button>` : ""}
+        <button class="btn secondary" id="fClose">Fermer</button>
+        <button class="btn" id="fEdit">✏️ Modifier</button>
+      </div>
+    </div>
+  </div>`;
+  $("#fClose").onclick = closeModal;
+  $("#modalBg").onclick = (e) => { if (e.target === $("#modalBg")) closeModal(); };
+  $("#fEdit").onclick = () => { closeModal(); openModal(book); };
+  const fBtn = $("#fFetch");
+  if (fBtn) fBtn.onclick = async () => {
+    fBtn.disabled = true;
+    fBtn.textContent = "🔎 Recherche en cours…";
+    let data = null;
+    if (book.isbn) data = await fetchBookInfo(book.isbn);
+    if (!data || data.error) data = await fetchBookInfoByTitle(book.title, book.author);
+    if (data && !data.error) {
+      if (!book.notes && data.summary) book.notes = data.summary;
+      if (!book.author && data.author) book.author = data.author;
+      if (!book.year && data.year) book.year = data.year;
+      if (!book.publisher && data.publisher) book.publisher = data.publisher;
+      if (!book.pages && data.pages) book.pages = data.pages;
+      if (!book.cover && data.cover) book.cover = data.cover;
+      if (!book.preview && data.preview) book.preview = data.preview;
+      if (!book.rating && data.rating) book.rating = data.rating;
+      if (!book.category && data.subjects && data.subjects.length) book.category = data.subjects[0];
+      save(); render();
+      toast("Fiche complétée ✅");
+      openFiche(book); // réaffiche la fiche enrichie
+    } else {
+      fBtn.disabled = false;
+      fBtn.textContent = "❌ " + ((data && data.error) || "introuvable") + " — saisie manuelle ?";
+    }
+  };
+}
+
+// ---------- Modale d'édition ----------
+function openModal(book) {
+  // Nouveau livre : soit aucune fiche transmise, soit une fiche pré-remplie
+  // (issue d'un scan) qui n'est pas encore dans la bibliothèque.
+  const isNew = !book || !books.some(b => b.id === book.id);
+  book = book || { id: uid(), title: "", author: "", isbn: "", year: "", status: "to-read", notes: "", category: "", lieu: "", loanedTo: "", addedAt: Date.now() };
+  book.lieu = book.lieu || "";
+  book.category = book.category || "";
+  const catList = [...new Set(books.map(b => b.category).filter(Boolean))];
+  $("#modalRoot").innerHTML = `
+  <div class="modal-bg" id="modalBg">
+    <div class="modal">
+      <h2>${isNew ? "➕ Ajouter un livre" : "✏️ Modifier le livre"}</h2>
+      <div class="grid">
+        <div class="full"><label>Titre *</label><input id="mTitle" value="${esc(book.title)}" ${book.title ? "" : "autofocus"} /></div>
+        <div><label>Auteur</label><input id="mAuthor" value="${esc(book.author)}" /></div>
+        <div><label>Année</label><input id="mYear" value="${esc(book.year)}" inputmode="numeric" /></div>
+        <div class="full"><label>ISBN / code-barres</label>
+          <div style="display:flex;gap:8px">
+            <input id="mIsbn" value="${esc(book.isbn)}" inputmode="numeric" style="flex:1" />
+            <button class="btn secondary" id="mFetch" title="Rechercher les infos sur Open Library à partir de l'ISBN">🌐</button>
+          </div>
+          <div class="hint" id="mFetchMsg"></div>
+        </div>
+        <div><label>Statut</label>
+          <select id="mStatus">
+            ${Object.entries(STATUS).map(([v, l]) => `<option value="${v}" ${book.status === v ? "selected" : ""}>${l}</option>`).join("")}
+          </select>
+        </div>
+        <div><label>Catégorie</label>
+          <input id="mCategory" value="${esc(book.category)}" list="catList" placeholder="Roman, BD, Science, …" />
+          <datalist id="catList">${catList.map(c => `<option value="${esc(c)}"></option>`).join("")}</datalist>
+        </div>
+        <div><label>Prêté à</label><input id="mLoan" value="${esc(book.loanedTo)}" placeholder="(vide si non prêté)" /></div>
+        <div><label>Lieu de stockage</label>
+          <select id="mLieu">
+            <option value="" ${!book.lieu ? "selected" : ""}>Non précisé</option>
+            ${LIEUX.map(l => `<option value="${esc(l)}" ${book.lieu === l ? "selected" : ""}>${esc(l)}</option>`).join("")}
+          </select>
+        </div>
+        <div><label>Éditeur</label><input id="mPub" value="${esc(book.publisher || "")}" placeholder="Ex. Gallimard" /></div>
+        <div><label>Pages</label><input id="mPages" value="${esc(book.pages || "")}" inputmode="numeric" /></div>
+        <div class="full"><label>Notes / résumé</label><textarea id="mNotes" placeholder="Résumé, avis… (ou cliquez sur 🌐 pour l'importer)">${esc(book.notes)}</textarea></div>
+        <div class="full"><label>Mon avis</label><textarea id="mOpinion" placeholder="Votre impression personnelle sur ce livre…">${esc(book.opinion || "")}</textarea></div>
+        <div class="full"><label>Remarques (une par ligne)</label><textarea id="mRemarks" placeholder="Ex. Passage marquant au chapitre 3&#10;Vérifier la suite&#10;Offert par…">${esc(book.remarks || "")}</textarea></div>
+        <div class="full"><label>Couverture (URL ou fichier local)</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input class="field" id="mCoverUrl" style="flex:1;min-width:180px" value="${esc(book.cover || "")}" placeholder="https://…/couverture.jpg" />
+            <button type="button" class="btn secondary" id="mCoverBtn">📁 Fichier…</button>
+            <input type="file" id="mCoverFile" accept="image/*" hidden />
+            ${book.cover ? `<img src="${esc(book.cover)}" alt="" style="height:56px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.2)" onerror="this.style.display='none'" />` : ""}
+          </div>
+        </div>
+        ${book.cover || book.preview ? `<div class="full" style="display:flex;gap:12px;align-items:center">
+          ${book.cover ? `<img src="${esc(book.cover)}" alt="Couverture" style="height:90px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.2)" onerror="this.style.display='none'" />` : ""}
+          <div>
+            <div class="sub">${esc(book.publisher || "")}${book.pages ? " · " + esc(book.pages) + " pages" : ""}</div>
+            ${book.rating ? `<div class="sub">⭐ Note Google : ${esc(book.rating)}/5</div>` : ""}
+            ${book.preview ? `<a href="${esc(book.preview)}" target="_blank" rel="noopener">🔗 Aperçu / fiche en ligne</a>` : ""}
+          </div>
+        </div>` : ""}
+      </div>
+      <div class="row">
+        <button class="btn secondary" id="mCancel">Annuler</button>
+        <button class="btn" id="mSave">Enregistrer</button>
+      </div>
+    </div>
+  </div>`;
+  $("#mCancel").onclick = closeModal;
+  $("#modalBg").onclick = (e) => { if (e.target === $("#modalBg")) closeModal(); };
+  const applyInfo = (data, msg, byTitle) => {
+    if (!$("#mTitle").value) $("#mTitle").value = data.title;
+    if (!$("#mAuthor").value) $("#mAuthor").value = data.author;
+    if (!$("#mYear").value && data.year) $("#mYear").value = data.year;
+    if (!$("#mNotes").value && data.summary) $("#mNotes").value = data.summary;
+    if (!$("#mCategory").value && data.subjects.length) $("#mCategory").value = data.subjects[0];
+    if (!$("#mPub").value && data.publisher) $("#mPub").value = data.publisher;
+    if (!$("#mPages").value && data.pages) $("#mPages").value = data.pages;
+    book.cover = data.cover || book.cover || "";
+    book.preview = data.preview || book.preview || "";
+    book.rating = data.rating || book.rating || "";
+    msg.textContent = `✅ Fiche trouvée (${data.source}) et complétée (champs vides uniquement).`;
+  };
+  $("#mCoverBtn").onclick = () => $("#mCoverFile").click();
+  $("#mCoverFile").addEventListener("change", async () => {
+    const file = $("#mCoverFile").files[0];
+    if (!file) return;
+    try {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      await img.decode();
+      // Réduction : 300 px de large, JPEG compressé — la couverture tient
+      // confortablement dans la base locale et reste nette sur cartes et fiches.
+      const cnv = document.createElement("canvas");
+      cnv.width = 300;
+      cnv.height = Math.round(img.naturalHeight * 300 / img.naturalWidth);
+      cnv.getContext("2d").drawImage(img, 0, 0, cnv.width, cnv.height);
+      URL.revokeObjectURL(img.src);
+      $("#mCoverUrl").value = cnv.toDataURL("image/jpeg", 0.85);
+      toast("Couverture importée ✅ — pensez à « Enregistrer »");
+    } catch (e) { toast("❌ Image illisible"); }
+    $("#mCoverFile").value = "";
+  });
+  $("#mFetch").onclick = async () => {
+    const isbn = $("#mIsbn").value.replace(/\D/g, "");
+    const msg = $("#mFetchMsg");
+    if (isbn) {
+      msg.textContent = "🔎 Recherche par ISBN (Google Books, puis Open Library)…";
+      const data = await fetchBookInfo(isbn);
+      if (data && !data.error) { applyInfo(data, msg); return; }
+      msg.textContent = `ISBN : ${data.error}.`;
+    }
+    // L'ISBN a échoué (ou est absent) : si un titre est saisi, on cherche par titre.
+    const title = $("#mTitle").value.trim();
+    if (!title) { msg.textContent = "⚠️ Entrez un ISBN ou un titre, puis cliquez sur 🌐."; return; }
+    msg.textContent = "🔎 Recherche par titre…";
+    const byTitle = await fetchBookInfoByTitle(title, $("#mAuthor").value.trim());
+    if (byTitle && !byTitle.error) { applyInfo(byTitle, msg); return; }
+    msg.textContent = `❌ ${byTitle ? byTitle.error : "échec"}. Complétez manuellement.`;
+  };
+  $("#mSave").onclick = () => {
+    try {
+      const title = $("#mTitle").value.trim();
+      if (!title) { alert("Le titre est obligatoire."); return; }
+      Object.assign(book, {
+        title, author: $("#mAuthor").value.trim(), year: $("#mYear").value.trim(),
+        isbn: $("#mIsbn").value.trim(), status: $("#mStatus").value,
+        category: $("#mCategory").value.trim(),
+        lieu: $("#mLieu").value,
+        loanedTo: $("#mLoan").value.trim(), notes: $("#mNotes").value.trim(),
+        publisher: $("#mPub").value.trim(), pages: $("#mPages").value.trim(),
+        opinion: $("#mOpinion").value.trim(), remarks: $("#mRemarks").value.trim(),
+        cover: $("#mCoverUrl").value.trim()
+      });
+      if (isNew) books.push(book);
+      save(); closeModal(); render();
+      toast(isNew ? "Livre ajouté 🎉" : "Modifications enregistrées");
+    } catch (err) {
+      toast("❌ Erreur d'enregistrement : " + (err && err.name ? err.name + " — " + err.message : String(err)));
+    }
+  };
+}
+const closeModal = () => { $("#modalRoot").innerHTML = ""; };
+$("#btnAdd").addEventListener("click", () => openModal(null));
+
+// ---------- Export / Import ----------
+$("#btnExport").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(books, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "ma-bibliotheque.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+let MODE_IMPORT = "fusion";
+$("#btnImportFusion").addEventListener("click", () => { MODE_IMPORT = "fusion"; $("#importFile").click(); });
+$("#btnImportRemplace").addEventListener("click", () => { MODE_IMPORT = "remplace"; $("#importFile").click(); });
+$("#importFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (!Array.isArray(data)) throw new Error();
+    const mapBook = (b) => ({ id: b.id || uid(), title: b.title, author: b.author || "", isbn: b.isbn || "", year: b.year || "", status: b.status || "to-read", notes: b.notes || "", category: b.category || "", lieu: b.lieu || "", loanedTo: b.loanedTo || "", publisher: b.publisher || "", pages: b.pages || "", cover: b.cover || "", preview: b.preview || "", rating: b.rating || "", opinion: b.opinion || "", remarks: b.remarks || "", addedAt: b.addedAt || Date.now() });
+    if (MODE_IMPORT === "remplace") {
+      const valides = data.filter(b => b && b.title);
+      if (!valides.length) { toast("Aucun livre dans le fichier"); e.target.value = ""; return; }
+      books = valides.map(mapBook);
+      save(); render();
+      toast(`Import : bibliothèque remplacée (${books.length} livre(s))`);
+      e.target.value = "";
+      return;
+    }
+    const ids = new Set(books.map(b => b.id || b.isbn || b.title));
+    let added = 0;
+    for (const b of data) {
+      if (!b || !b.title) continue;
+      if (ids.has(b.id || b.isbn || b.title)) continue;
+      books.push(mapBook(b));
+      added++;
+    }
+    save(); render();
+    toast(`Import : ${added} livre(s) ajouté(s)`);
+  } catch { toast("Fichier JSON invalide"); }
+  e.target.value = "";
+});
+
+// ---------- Import CSV (Babelio, Goodreads, Excel…) ----------
+// Les colonnes sont reconnues automatiquement, quel que soit leur libellé
+// ou leur ordre, pour accepter la plupart des exports de bibliothèques.
+const normTxt = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+function parseCsvLine(line, sep) {
+  const cells = []; let cur = "", q = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (q) { if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (ch === '"') { q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === sep) { cells.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  cells.push(cur);
+  return cells.map(c => c.trim());
+}
+$("#btnImportCsv").addEventListener("click", () => $("#importCsvFile").click());
+$("#importCsvFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) throw new Error("vide");
+    const head = lines[0];
+    const sep = [";", "\t", ","].map(s => ({ s, n: head.split(s).length })).sort((a, b) => b.n - a.n)[0].s;
+    const headers = parseCsvLine(head, sep).map(normTxt);
+    const findCol = (keys) => headers.findIndex(h => keys.some(k => h.includes(k)));
+    const col = {
+      title: findCol(["titre", "title", "livre", "oeuvre"]),
+      author: findCol(["auteur", "author"]),
+      isbn: findCol(["isbn", "ean", "codebarre"]),
+      year: findCol(["annee", "year", "publication"]),
+      publisher: findCol(["editeur", "publisher"]),
+      status: findCol(["statut", "status"]),
+      category: findCol(["categorie", "category", "genre", "etagere"]),
+      lieu: findCol(["lieu", "localisation", "emplacement", "stockage"])
+    };
+    if (col.title < 0 && col.isbn < 0) throw new Error("colonnes");
+    const normStatus = (v) => {
+      const n = normTxt(v);
+      if (n.includes("cours") || n.includes("lecture") || n.includes("reading")) return "reading";
+      if (n === "lu" || n === "read" || n.includes("termine") || n.includes("fini")) return "read";
+      return "to-read";
+    };
+    const cell = (r, i) => (i >= 0 && r[i] !== undefined ? r[i] : "");
+    const seen = new Set(books.map(b => (b.isbn || b.title + "|" + b.author).toLowerCase()));
+    let added = 0, skipped = 0;
+    for (const line of lines.slice(1)) {
+      const r = parseCsvLine(line, sep);
+      const title = cell(r, col.title), isbn = cell(r, col.isbn).replace(/[^\dXx]/g, "");
+      if (!title && !isbn) continue;
+      const key = (isbn || title + "|" + cell(r, col.author)).toLowerCase();
+      if (seen.has(key)) { skipped++; continue; }
+      seen.add(key);
+      books.push({
+        id: uid(), title: title || isbn, author: cell(r, col.author),
+        isbn, year: (cell(r, col.year).match(/\d{4}/) || [""])[0],
+        status: normStatus(cell(r, col.status)), category: cell(r, col.category),
+        lieu: cell(r, col.lieu),
+        publisher: cell(r, col.publisher),
+        notes: "", opinion: "", remarks: "", loanedTo: "", pages: "", cover: "", preview: "", rating: "",
+        addedAt: Date.now()
+      });
+      added++;
+    }
+    save(); render();
+    toast(`Import CSV : ${added} ajouté(s)${skipped ? ", " + skipped + " doublon(s) ignoré(s)" : ""}. Astuce : ouvrez la fiche puis 🌐 pour compléter depuis le web.`);
+  } catch (err) {
+    toast("❌ CSV non reconnu (" + (err && err.message === "colonnes" ? "aucune colonne titre ou ISBN trouvée" : "fichier vide ou illisible") + ")");
+  }
+  e.target.value = "";
+});
+
+// ---------- Scan codes-barres ----------
+let stream = null, scanTimer = null, detector = null;
+
+function scanMsg(html) { $("#scanMsg").innerHTML = html; }
+
+async function startScan() {
+  scanMsg("");
+  const hasNative = "BarcodeDetector" in window;
+  const hasZxing = typeof window.ZXing !== "undefined" && window.ZXing.BrowserMultiFormatReader;
+  if (!hasNative && !hasZxing) {
+    scanMsg(hasNative || !window.__zxingFailed
+      ? "⚠️ Aucun moteur de détection disponible. Utilisez la saisie manuelle ci-dessous."
+      : "⚠️ Ni l'API native ni la bibliothèque ZXing ne sont disponibles (accès réseau bloqué dans cet aperçu). Utilisez la saisie manuelle ci-dessous — sur votre serveur, le repli iPhone fonctionnera.");
+    return;
+  }
+  try {
+    if (hasNative) {
+      detector = { type: "native", det: new BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "qr_code"] }) };
+    } else {
+      detector = { type: "zxing" };
+      // Décodage logiciel : on analyse chaque image du flux vidéo nous-mêmes,
+      // ce qui garde le rendu du cadre de visée et marche aussi sur iPhone/Safari.
+      detector.zxingReader = new window.ZXing.MultiFormatReader();
+      detector.zxingHints = null;
+    }
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    const video = $("#video");
+    video.srcObject = stream;
+    await video.play();
+    $("#scanWrap").hidden = false;
+    $("#btnStartScan").hidden = true;
+    $("#btnStopScan").hidden = false;
+    scanMsg(`Moteur : ${hasNative ? "natif" : "ZXing (repli iOS)"}. Alignez le code-barres dans le cadre…`);
+    scanTimer = setInterval(async () => {
+      try {
+        let code = "";
+        if (detector.type === "native") {
+          const codes = await detector.det.detect(video);
+          if (codes.length) code = codes[0].rawValue;
+        } else {
+          // Décodage ZXing à partir d'une image du flux vidéo
+          const cnv = document.createElement("canvas");
+          cnv.width = video.videoWidth; cnv.height = video.videoHeight;
+          if (!cnv.width) return;
+          cnv.getContext("2d").drawImage(video, 0, 0);
+          const lum = new window.ZXing.HTMLCanvasElementLuminanceSource(cnv);
+          const bin = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(lum));
+          const result = detector.zxingReader.decode(bin, detector.zxingHints);
+          if (result) code = result.getText();
+        }
+        if (code) {
+          code = code.replace(/\D/g, "");
+          stopScan();
+          handleScannedCode(code);
+        }
+      } catch (e) { /* frame non analysable, on continue */ }
+    }, 500);
+  } catch (err) {
+    scanMsg("❌ Impossible d'accéder à la caméra. Vérifiez les permissions du navigateur et que la page est servie en HTTPS (ou ouverte en local). <em>(" + esc(err.name) + ")</em>");
+  }
+}
+
+function stopScan() {
+  if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  $("#scanWrap").hidden = true;
+  $("#btnStartScan").hidden = false;
+  $("#btnStopScan").hidden = true;
+}
+
+$("#btnStartScan").addEventListener("click", startScan);
+$("#btnStopScan").addEventListener("click", stopScan);
+
+// ---------- Clé API Google Books (stockée localement, facultative) ----------
+const KEYSTORE = "bibliotheque_google_api_key";
+const getApiKey = () => (localStorage.getItem(KEYSTORE) || "").trim();
+$("#apiKey").value = getApiKey();
+$("#btnSaveKey").addEventListener("click", () => {
+  localStorage.setItem(KEYSTORE, $("#apiKey").value.trim());
+  $("#keyMsg").textContent = getApiKey() ? "✅ Clé enregistrée. Les recherches Google Books utilisent désormais votre quota personnel." : "Clé effacée.";
+});
+
+// ---------- Récupération des infos depuis internet ----------
+// Recherche en cascade : Google Books (excellente couverture des éditions françaises),
+// puis Open Library en secours. Diagnostics précis : chaque échec est identifié
+// (« introuvable » vs « API injoignable ») pour ne pas tromper l'utilisateur.
+async function fetchFromGoogleBooks(isbn) {
+  try {
+    const key = getApiKey();
+    const auth = key ? `&key=${encodeURIComponent(key)}` : "";
+    // Le paramètre « country » filtre parfois des livres français : on essaie
+    // toujours les deux variantes (FR puis US), même si la première répond vide.
+    // Les erreurs passagères (429 quota/minute, 503 indisponible) se résorbent
+    // souvent en quelques secondes : on réessaie une fois après une pause.
+    let data = null, status = 0, sawOk = false;
+    for (let attempt = 0; attempt < 2 && !data; attempt++) {
+      if (attempt) await new Promise(r => setTimeout(r, 4000));
+      for (const c of ["FR", "US"]) {
+        try {
+          const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&country=${c}${auth}`, { signal: AbortSignal.timeout(8000) });
+          status = res.status;
+          if (res.ok) {
+            sawOk = true;
+            const d = await res.json();
+            if (d.totalItems) { data = d; break; }
+          }
+        } catch (e) { /* on tente la variante suivante */ }
+      }
+    }
+    if (!data) {
+      if (sawOk) return { error: "ISBN inconnu de Google Books" };
+      return { error: `API Google Books inaccessible (code ${status}${status === 429 && !key ? " — quota public épuisé, ajoutez une clé API gratuite" : status === 503 ? " — Google indisponible, réessayez dans un instant" : ""})` };
+    }
+    const item = data.items && data.items[0] && data.items[0].volumeInfo;
+    if (!item || !item.title) return { error: "ISBN inconnu de Google Books" };
+    return {
+      title: item.title,
+      author: (item.authors || []).join(", "),
+      year: item.publishedDate ? String(item.publishedDate).slice(0, 4) : "",
+      summary: item.description ? String(item.description).replace(/<[^>]+>/g, "") : "",
+      subjects: (item.categories || []).slice(0, 5),
+      publisher: item.publisher || "",
+      pages: item.pageCount || "",
+      lang: item.language || "",
+      rating: item.averageRating || "",
+      cover: (item.imageLinks && (item.imageLinks.thumbnail || item.imageLinks.smallThumbnail)) || "",
+      preview: (data.items[0].volumeInfo && data.items[0].volumeInfo.previewLink) || (data.items[0] && data.items[0].accessInfo && data.items[0].accessInfo.webReaderLink) || ""
+    };
+  } catch (e) { return { error: "réseau bloqué ou hors ligne (Google Books)" }; }
+}
+
+async function fetchFromOpenLibrary(isbn) {
+  try {
+    const res = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`, { signal: AbortSignal.timeout(8000) });
+    const data = await res.json();
+    const rec = data && data["ISBN:" + isbn];
+    if (!rec || !rec.title) return { error: "ISBN inconnu d'Open Library" };
+    const summary = rec.excerpts && rec.excerpts[0] && rec.excerpts[0].text
+      ? rec.excerpts[0].text
+      : (rec.notes ? String(rec.notes) : "");
+    return {
+      title: rec.title,
+      author: rec.authors && rec.authors[0] ? rec.authors[0].name.replace(/^([^,]+),\s*(.+)$/, "$2 $1") : "",
+      year: rec.publish_date ? String(rec.publish_date).match(/\d{4}/)?.[0] : "",
+      summary,
+      subjects: (rec.subjects || []).map(s => s.name).filter(n => n && n.length < 30).slice(0, 5),
+      publisher: (rec.publishers && rec.publishers[0]) ? (typeof rec.publishers[0] === "string" ? rec.publishers[0] : (rec.publishers[0].name || "")) : "",
+      pages: rec.number_of_pages || "",
+      lang: (rec.languages && rec.languages[0] && rec.languages[0].key) ? rec.languages[0].key.replace("/languages/", "") : "",
+      cover: (rec.cover && (rec.cover.medium || rec.cover.small || rec.cover.large)) || "",
+      preview: rec.url || ""
+    };
+  } catch (e) {
+    return { error: "réseau bloqué ou hors ligne (Open Library)" };
+  }
+}
+
+async function fetchBookInfo(isbn) {
+  const errors = [];
+  let g = await fetchFromGoogleBooks(isbn);
+  if (g && !g.error) {
+    // Fiche incomplète (résumé ou éditeur manquant) : on essaie de la compléter
+    // via une recherche par titre — une autre édition est souvent mieux renseignée.
+    if (!g.summary || !g.publisher || !g.cover) {
+      const byTitle = await fetchBookInfoByTitle(g.title, g.author);
+      if (byTitle && !byTitle.error) {
+        for (const k of ["summary", "publisher", "cover", "preview", "pages", "rating", "lang"]) {
+          if (!g[k] && byTitle[k]) g[k] = byTitle[k];
+        }
+      }
+    }
+    if (g.summary || g.author) return { ...g, source: "Google Books" };
+  }
+  if (g && g.error) errors.push(g.error);
+  const o = await fetchFromOpenLibrary(isbn);
+  if (o && !o.error) return { ...o, source: "Open Library" };
+  if (o && o.error) errors.push(o.error);
+  if (g && !g.error) return { ...g, source: "Google Books" }; // fiche trouvée mais sommaire
+  return { error: errors.join(" ; ") || "aucune réponse" };
+}
+
+// Recherche par titre (+ auteur) : secours quand l'ISBN est inconnu,
+// fréquent pour les éditeurs français qui ne transmettent pas leurs
+// métadonnées ISBN à Google Books.
+// Recherche par titre sur Open Library : dernier recours quand Google Books
+// ne référence pas le livre (fréquent pour certains éditeurs français).
+async function fetchFromOpenLibraryByTitle(title, author) {
+  try {
+    const p = new URLSearchParams({ title, limit: "5" });
+    if (author) p.set("author", author);
+    const res = await fetch(`https://openlibrary.org/search.json?${p}`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (!d.numFound) return null;
+    const doc = (d.docs || []).find(x => x.title && x.title.toLowerCase() === title.toLowerCase()) || d.docs[0];
+    if (!doc || !doc.title) return null;
+    // Le résumé se trouve sur la fiche de l'œuvre
+    let summary = "";
+    try {
+      const w = await fetch(`https://openlibrary.org${doc.key}.json`, { signal: AbortSignal.timeout(8000) });
+      if (w.ok) {
+        const wd = await w.json();
+        summary = typeof wd.description === "string" ? wd.description : (wd.description && wd.description.value) || "";
+      }
+    } catch (e) { /* résumé absent : pas grave */ }
+    return {
+      title: doc.title,
+      author: (doc.author_name || []).join(", "),
+      year: doc.first_publish_year ? String(doc.first_publish_year) : "",
+      summary: String(summary).replace(/<[^>]+>/g, "").replace(/\{\{[^}]*\}\}/g, "").trim(),
+      subjects: (doc.subject || []).slice(0, 5),
+      publisher: (doc.publisher || [])[0] || "",
+      pages: "",
+      lang: (doc.language || [])[0] || "",
+      cover: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : "",
+      preview: "",
+      source: "Open Library (par titre)"
+    };
+  } catch (e) { return null; }
+}
+
+async function fetchBookInfoByTitle(title, author) {
+  try {
+    const key = getApiKey();
+    const auth = key ? `&key=${encodeURIComponent(key)}` : "";
+    const gb = async (q, extra) => {
+      // FR puis US systématiquement : le paramètre « country » filtre parfois
+      // des livres français, y compris quand il répond « aucun résultat ».
+      for (const c of ["FR", "US"]) {
+        try {
+          const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=10&country=${c}${extra || ""}${auth}`, { signal: AbortSignal.timeout(8000) });
+          if (res.ok) {
+            const d = await res.json();
+            if (d.totalItems) return d;
+          }
+        } catch (e) { /* variante suivante */ }
+      }
+      return null;
+    };
+    const pickBest = (data) => {
+      const items = (data.items || []).map(i => i.volumeInfo).filter(v => v && v.title);
+      if (!items.length) return null;
+      const score = v => (v.language === "fr" ? 100 : 0) + (v.description ? 10 : 0) + (v.publisher ? 5 : 0) + (v.imageLinks ? 5 : 0);
+      return items.sort((a, b) => score(b) - score(a))[0];
+    };
+    // 1) recherche stricte : titre exact entre guillemets, éventuellement avec l'auteur
+    let q = author ? `intitle:"${title}" inauthor:"${author}"` : `intitle:"${title}"`;
+    let data = await gb(q, "&langRestrict=fr");
+    // 2) recherche stricte sans contrainte de langue
+    if (!data) data = await gb(q, "");
+    // 3) recherche libre : titre + auteur comme simples mots-clés
+    if (!data) data = await gb(author ? `${title} ${author}` : title, "");
+    // 4) dernier recours : Open Library par titre
+    if (!data) {
+      const ol = await fetchFromOpenLibraryByTitle(title, author);
+      if (ol) return ol;
+    }
+    if (!data) return { error: "titre introuvable" };
+    const item = pickBest(data);
+    if (!item) return { error: "titre introuvable" };
+    return {
+      title: item.title,
+      author: (item.authors || []).join(", "),
+      year: item.publishedDate ? String(item.publishedDate).slice(0, 4) : "",
+      summary: item.description ? String(item.description).replace(/<[^>]+>/g, "") : "",
+      subjects: (item.categories || []).slice(0, 5),
+      publisher: item.publisher || "",
+      pages: item.pageCount || "",
+      lang: item.language || "",
+      rating: item.averageRating || "",
+      cover: (item.imageLinks && (item.imageLinks.thumbnail || item.imageLinks.smallThumbnail)) || "",
+      preview: item.previewLink || "",
+      source: "Google Books (par titre)"
+    };
+  } catch (e) { return { error: "réseau bloqué ou hors ligne (Google Books)" }; }
+}
+
+// ---------- Complétion en masse ----------
+// Parcourt les fiches incomplètes (pas de couverture, résumé ou éditeur) et
+// les enrichit automatiquement. Le rythme est posé pour respecter le quota
+// de Google Books (environ 1 livre par seconde et demie).
+let bulkRunning = false;
+$("#btnCompleteAll").addEventListener("click", async () => {
+  if (bulkRunning) return;
+  const todo = books.filter(b => !b.cover || !b.notes || !b.publisher);
+  if (!todo.length) { toast("Toutes les fiches sont déjà complètes ✨"); return; }
+  if (!confirm(`Compléter ${todo.length} fiche(s) depuis le web ? Cela peut prendre environ ${Math.ceil(todo.length * 1.5 / 60)} minute(s).`)) return;
+  bulkRunning = true;
+  const btn = $("#btnCompleteAll");
+  btn.disabled = true;
+  let done = 0, ok = 0;
+  for (const book of todo) {
+    btn.textContent = `🔎 ${done + 1}/${todo.length}…`;
+    let data = null;
+    try {
+      if (book.isbn) data = await fetchBookInfo(book.isbn);
+      if (!data || data.error) data = await fetchBookInfoByTitle(book.title, book.author);
+      if (data && !data.error) {
+        if (!book.notes && data.summary) book.notes = data.summary;
+        if (!book.author && data.author) book.author = data.author;
+        if (!book.year && data.year) book.year = data.year;
+        if (!book.publisher && data.publisher) book.publisher = data.publisher;
+        if (!book.pages && data.pages) book.pages = data.pages;
+        if (!book.cover && data.cover) book.cover = data.cover;
+        if (!book.preview && data.preview) book.preview = data.preview;
+        if (!book.rating && data.rating) book.rating = data.rating;
+        if (!book.category && data.subjects && data.subjects.length) book.category = data.subjects[0];
+        ok++;
+      }
+    } catch (e) { /* livre suivant */ }
+    done++;
+    save(); render();
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  bulkRunning = false;
+  btn.disabled = false;
+  btn.textContent = "🌐 Compléter tout";
+  toast(`Complétion terminée : ${ok}/${todo.length} fiche(s) enrichie(s) ✨`);
+});
+
+
+// ---------- Traitement d'un code scanné / saisi ----------
+async function handleScannedCode(code) {
+  if (!code) return;
+  const existing = books.find(b => b.isbn === code);
+  if (existing) {
+    toast(`« ${existing.title} » est déjà dans votre bibliothèque`);
+    openModal(existing);
+    return;
+  }
+  scanMsg(`Code détecté : <strong>${esc(code)}</strong> — recherche des infos (Google Books, puis Open Library)…`);
+  const draft = { id: uid(), title: "", author: "", isbn: code, year: "", status: "to-read", notes: "", category: "", loanedTo: "", addedAt: Date.now() };
+  const info = await fetchBookInfo(code);
+  if (info && !info.error) {
+    draft.title = info.title;
+    draft.author = info.author;
+    draft.year = info.year;
+    if (info.summary) draft.notes = info.summary;
+    if (info.subjects.length) draft.category = info.subjects[0];
+    draft.publisher = info.publisher || "";
+    draft.pages = info.pages || "";
+    draft.cover = info.cover || "";
+    draft.preview = info.preview || "";
+    draft.rating = info.rating || "";
+    scanMsg(`✅ « ${esc(info.title)} » trouvé sur ${info.source}. Vérifiez et complétez la fiche…`);
+  } else {
+    scanMsg(`Code : <strong>${esc(code)}</strong> — ${esc(info && info.error ? info.error : "aucune fiche trouvée")}. Complétez manuellement…`);
+  }
+  openModal(draft);
+}
+
+$("#btnManual").addEventListener("click", () => handleScannedCode($("#manualCode").value.replace(/\D/g, "")));
+$("#manualCode").addEventListener("keydown", (e) => { if (e.key === "Enter") handleScannedCode(e.target.value.replace(/\D/g, "")); });
+
+// ---------- Init ----------
+// Toute erreur JavaScript imprévue est affichée à l'écran au lieu de rester invisible
+window.addEventListener("error", (e) => {
+  try { toast("⚠️ Erreur inattendue : " + (e.message || "inconnue")); } catch (err) {}
+});
+render();
+</script>
+</body>
+</html>
