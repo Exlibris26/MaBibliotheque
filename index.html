@@ -56,7 +56,29 @@
   .empty { text-align: center; color: var(--muted); padding: 40px 0; }
   .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
   .filters select, .filters input { padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
-  @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } header { padding: 12px; } header h1 { flex-basis: 100%; } }
+  @media (max-width: 560px) {
+    html { font-size: 17px; -webkit-text-size-adjust: 100%; }
+    body { line-height: 1.5; }
+    .grid { grid-template-columns: 1fr; }
+    header { padding: 12px; }
+    header h1 { flex-basis: 100%; }
+    header .stats { flex-basis: 100%; }
+    .tabs { width: 100%; }
+    .tab { flex: 1; padding: 10px 0; text-align: center; }
+    /* Champs à 16px : empêche iOS de zoomer automatiquement à chaque saisie */
+    input, select, textarea { font-size: 16px; }
+    .btn { padding: 12px 16px; min-height: 44px; }
+    .toolbar { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    .toolbar .btn { width: 100%; }
+    .filters { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    .filters select, .filters input { width: 100%; }
+    .book h3 { font-size: 1.05rem; line-height: 1.35; }
+    .book .sub { font-size: .9rem; }
+    .badge { font-size: .78rem; padding: 3px 9px; margin-bottom: 2px; }
+    .icon-btn { padding: 8px 12px; font-size: .85rem; min-height: 40px; }
+    .modal { padding: 16px; }
+    .hint { font-size: .9rem; }
+  }
 </style>
 </head>
 <body>
