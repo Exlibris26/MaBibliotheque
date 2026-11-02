@@ -74,7 +74,8 @@
       <input class="field" id="search" placeholder="🔍 Rechercher titre, auteur, ISBN…" />
       <button class="btn" id="btnAdd">+ Ajouter</button>
       <button class="btn secondary" id="btnExport">⬇ Exporter</button>
-      <button class="btn secondary" id="btnImport">⬆ Importer</button>
+      <button class="btn secondary" id="btnImportFusion" title="Ajoute les livres du fichier sans toucher à la bibliothèque existante">⬆ Importer JSON — Fusionner</button>
+      <button class="btn secondary" id="btnImportRemplace" title="Remplace toute la bibliothèque par le fichier">⬆ Importer JSON — Remplacer</button>
       <button class="btn secondary" id="btnImportCsv">⬆ CSV (Babelio…)</button>
       <button class="btn secondary" id="btnCompleteAll">🌐 Compléter tout</button>
       <input type="file" id="importFile" accept=".json" hidden />
@@ -101,6 +102,10 @@
         <option value="category">Catégorie</option>
       </select>
       <select id="fCategory"></select>
+      <select id="fLieu">
+        <option value="">Tous les lieux</option>
+        <option value="__none">Lieu non précisé</option>
+      </select>
     </div>
     <div id="bookList"></div>
   </section>
@@ -165,6 +170,7 @@ function toast(msg) {
   setTimeout(() => t.remove(), 3000);
 }
 const STATUS = { "to-read": "À lire", "reading": "En lecture", "read": "Lu" };
+const LIEUX = ["Chaponost S", "Chaponost P", "Chaponost B", "Cornillon"];
 
 // ---------- Onglets ----------
 document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => {
@@ -177,12 +183,13 @@ document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", (
 // ---------- Rendu liste ----------
 function render() {
   const q = $("#search").value.trim().toLowerCase();
-  const st = $("#fStatus").value, ln = $("#fLoaned").value, sort = $("#fSort").value, cat = $("#fCategory").value;
+  const st = $("#fStatus").value, ln = $("#fLoaned").value, sort = $("#fSort").value, cat = $("#fCategory").value, lieu = $("#fLieu").value;
   let list = books.filter(b =>
     (!q || [b.title, b.author, b.isbn].join(" ").toLowerCase().includes(q)) &&
     (!st || b.status === st) &&
     (!ln || b.loanedTo) &&
-    (!cat || (b.category || "") === cat)
+    (!cat || (b.category || "") === cat) &&
+    (!lieu || (lieu === "__none" ? !b.lieu : b.lieu === lieu))
   );
   // Clé de tri par nom de famille : « Martin, Jacques » → « Martin »,
   // « Jacques Martin » → « Martin ». Le tri bibliothécaire se fait sur le nom.
@@ -212,6 +219,13 @@ function render() {
   fCat.innerHTML = `<option value="">Toutes les catégories</option>` +
     cats.map(c => `<option value="${esc(c)}" ${c === curCat ? "selected" : ""}>${esc(c)}</option>`).join("");
 
+  // Filtre par lieu de stockage (liste fixe)
+  const fLieu = $("#fLieu");
+  const curLieu = fLieu.value;
+  fLieu.innerHTML = `<option value="">Tous les lieux</option>` +
+    LIEUX.map(l => `<option value="${esc(l)}" ${l === curLieu ? "selected" : ""}>${esc(l)}</option>`).join("") +
+    `<option value="__none">Lieu non précisé</option>`;
+
   const el = $("#bookList");
   if (!list.length) {
     el.innerHTML = `<div class="empty">Aucun livre à afficher.<br>Ajoutez-en un, ou scannez un ISBN depuis l'onglet Scanner 📷</div>`;
@@ -223,7 +237,7 @@ function render() {
       <div class="meta">
         <h3>${esc(b.title)}</h3>
         <div class="sub">${esc(b.author || "Auteur inconnu")}${b.isbn ? " · ISBN " + esc(b.isbn) : ""}${b.year ? " · " + esc(b.year) : ""}${b.publisher ? " · " + esc(b.publisher) : ""}${b.pages ? " · " + esc(b.pages) + " p." : ""}</div>
-        ${b.category ? `<span class="badge" style="background:#e0e7ff;color:#3730a3">${esc(b.category)}</span>` : ""}
+        ${b.category ? `<span class="badge" style="background:#e0e7ff;color:#3730a3">${esc(b.category)}</span>` : ""}${b.lieu ? `<span class="badge" style="background:#fef9c3;color:#854d0e">📍 ${esc(b.lieu)}</span>` : ""}
         <span class="badge ${b.status === "read" ? "read" : ""}">${STATUS[b.status] || b.status}</span>
         ${b.loanedTo ? `<span class="badge loaned">Prêté à ${esc(b.loanedTo)}</span>` : ""}
         ${b.notes ? `<div class="sub" style="margin-top:6px">📝 ${esc(b.notes)}</div>` : ""}
@@ -270,7 +284,7 @@ $("#bookList").addEventListener("click", (e) => {
   }
 });
 
-["#search", "#fStatus", "#fLoaned", "#fSort"].forEach(s => $(s).addEventListener("input", render));
+["#search", "#fStatus", "#fLoaned", "#fSort", "#fLieu"].forEach(s => $(s).addEventListener("input", render));
 
 // ---------- Fiche lisible (vue détaillée) ----------
 function openFiche(book) {
@@ -289,6 +303,7 @@ function openFiche(book) {
           <div style="margin-bottom:8px">
             <span class="badge ${book.status === "read" ? "read" : ""}">${STATUS[book.status] || book.status}</span>
             ${book.category ? `<span class="badge" style="background:#e0e7ff;color:#3730a3">${esc(book.category)}</span>` : ""}
+            ${book.lieu ? `<span class="badge" style="background:#fef9c3;color:#854d0e">📍 ${esc(book.lieu)}</span>` : ""}
             ${book.loanedTo ? `<span class="badge loaned">Prêté à ${esc(book.loanedTo)}</span>` : ""}
           </div>
           <div class="sub" style="line-height:1.7">
@@ -342,7 +357,8 @@ function openModal(book) {
   // Nouveau livre : soit aucune fiche transmise, soit une fiche pré-remplie
   // (issue d'un scan) qui n'est pas encore dans la bibliothèque.
   const isNew = !book || !books.some(b => b.id === book.id);
-  book = book || { id: uid(), title: "", author: "", isbn: "", year: "", status: "to-read", notes: "", category: "", loanedTo: "", addedAt: Date.now() };
+  book = book || { id: uid(), title: "", author: "", isbn: "", year: "", status: "to-read", notes: "", category: "", lieu: "", loanedTo: "", addedAt: Date.now() };
+  book.lieu = book.lieu || "";
   book.category = book.category || "";
   const catList = [...new Set(books.map(b => b.category).filter(Boolean))];
   $("#modalRoot").innerHTML = `
@@ -370,6 +386,12 @@ function openModal(book) {
           <datalist id="catList">${catList.map(c => `<option value="${esc(c)}"></option>`).join("")}</datalist>
         </div>
         <div><label>Prêté à</label><input id="mLoan" value="${esc(book.loanedTo)}" placeholder="(vide si non prêté)" /></div>
+        <div><label>Lieu de stockage</label>
+          <select id="mLieu">
+            <option value="" ${!book.lieu ? "selected" : ""}>Non précisé</option>
+            ${LIEUX.map(l => `<option value="${esc(l)}" ${book.lieu === l ? "selected" : ""}>${esc(l)}</option>`).join("")}
+          </select>
+        </div>
         <div><label>Éditeur</label><input id="mPub" value="${esc(book.publisher || "")}" placeholder="Ex. Gallimard" /></div>
         <div><label>Pages</label><input id="mPages" value="${esc(book.pages || "")}" inputmode="numeric" /></div>
         <div class="full"><label>Notes / résumé</label><textarea id="mNotes" placeholder="Résumé, avis… (ou cliquez sur 🌐 pour l'importer)">${esc(book.notes)}</textarea></div>
@@ -458,6 +480,7 @@ function openModal(book) {
         title, author: $("#mAuthor").value.trim(), year: $("#mYear").value.trim(),
         isbn: $("#mIsbn").value.trim(), status: $("#mStatus").value,
         category: $("#mCategory").value.trim(),
+        lieu: $("#mLieu").value,
         loanedTo: $("#mLoan").value.trim(), notes: $("#mNotes").value.trim(),
         publisher: $("#mPub").value.trim(), pages: $("#mPages").value.trim(),
         opinion: $("#mOpinion").value.trim(), remarks: $("#mRemarks").value.trim(),
@@ -483,19 +506,31 @@ $("#btnExport").addEventListener("click", () => {
   a.click();
   URL.revokeObjectURL(a.href);
 });
-$("#btnImport").addEventListener("click", () => $("#importFile").click());
+let MODE_IMPORT = "fusion";
+$("#btnImportFusion").addEventListener("click", () => { MODE_IMPORT = "fusion"; $("#importFile").click(); });
+$("#btnImportRemplace").addEventListener("click", () => { MODE_IMPORT = "remplace"; $("#importFile").click(); });
 $("#importFile").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   try {
     const data = JSON.parse(await file.text());
     if (!Array.isArray(data)) throw new Error();
+    const mapBook = (b) => ({ id: b.id || uid(), title: b.title, author: b.author || "", isbn: b.isbn || "", year: b.year || "", status: b.status || "to-read", notes: b.notes || "", category: b.category || "", lieu: b.lieu || "", loanedTo: b.loanedTo || "", publisher: b.publisher || "", pages: b.pages || "", cover: b.cover || "", preview: b.preview || "", rating: b.rating || "", opinion: b.opinion || "", remarks: b.remarks || "", addedAt: b.addedAt || Date.now() });
+    if (MODE_IMPORT === "remplace") {
+      const valides = data.filter(b => b && b.title);
+      if (!valides.length) { toast("Aucun livre dans le fichier"); e.target.value = ""; return; }
+      books = valides.map(mapBook);
+      save(); render();
+      toast(`Import : bibliothèque remplacée (${books.length} livre(s))`);
+      e.target.value = "";
+      return;
+    }
     const ids = new Set(books.map(b => b.id || b.isbn || b.title));
     let added = 0;
     for (const b of data) {
       if (!b || !b.title) continue;
       if (ids.has(b.id || b.isbn || b.title)) continue;
-      books.push({ id: b.id || uid(), title: b.title, author: b.author || "", isbn: b.isbn || "", year: b.year || "", status: b.status || "to-read", notes: b.notes || "", category: b.category || "", loanedTo: b.loanedTo || "", publisher: b.publisher || "", pages: b.pages || "", cover: b.cover || "", preview: b.preview || "", rating: b.rating || "", opinion: b.opinion || "", remarks: b.remarks || "", addedAt: b.addedAt || Date.now() });
+      books.push(mapBook(b));
       added++;
     }
     save(); render();
@@ -539,7 +574,8 @@ $("#importCsvFile").addEventListener("change", async (e) => {
       year: findCol(["annee", "year", "publication"]),
       publisher: findCol(["editeur", "publisher"]),
       status: findCol(["statut", "status"]),
-      category: findCol(["categorie", "category", "genre", "etagere"])
+      category: findCol(["categorie", "category", "genre", "etagere"]),
+      lieu: findCol(["lieu", "localisation", "emplacement", "stockage"])
     };
     if (col.title < 0 && col.isbn < 0) throw new Error("colonnes");
     const normStatus = (v) => {
@@ -562,6 +598,7 @@ $("#importCsvFile").addEventListener("change", async (e) => {
         id: uid(), title: title || isbn, author: cell(r, col.author),
         isbn, year: (cell(r, col.year).match(/\d{4}/) || [""])[0],
         status: normStatus(cell(r, col.status)), category: cell(r, col.category),
+        lieu: cell(r, col.lieu),
         publisher: cell(r, col.publisher),
         notes: "", opinion: "", remarks: "", loanedTo: "", pages: "", cover: "", preview: "", rating: "",
         addedAt: Date.now()
